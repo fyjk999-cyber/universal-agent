@@ -128,17 +128,27 @@ class ShadowScanCoordinator:
                                               "source": listing.marketplace_id})
                     raw_listings.append(listing)
 
-        # ---- normalize + dedup by entity key ----
-        seen: Dict[str, str] = {}  # entity_key -> candidate_id
+        # ---- normalize + dedup by entity resolution（P0.7）----
+        # 仅 MATCH 置信度才合并 Candidate；PROBABLE_MATCH 不直接 merge。
+        from ...domains.flight import ResolutionConfidence, entity_key as _entity_key, resolve
+        candidate_listings: Dict[str, "RawListing"] = {}  # candidate_id -> 代表 listing
         for listing in raw_listings:
             cand, offer, quote, evidence = normalize_listing(listing, task.id)
-            key = entity_key(listing)
+            key = _entity_key(listing)
             quote.source = listing.marketplace_id
-            if key in seen:
-                cand.candidate_id = seen[key]  # merge into same candidate (§21)
-                offer.candidate_id = cand.candidate_id
+
+            # P0.7: 仅当 resolution 为 MATCH 才合并（strong key 相同）
+            matched_id: Optional[str] = None
+            for cand_id, rep in candidate_listings.items():
+                r = resolve(rep, listing)
+                if r.confidence == ResolutionConfidence.MATCH:
+                    matched_id = cand_id
+                    break
+            if matched_id is not None:
+                cand.candidate_id = matched_id
+                offer.candidate_id = matched_id
             else:
-                seen[key] = cand.candidate_id
+                candidate_listings[cand.candidate_id] = listing
                 outcome.candidates.append(cand)
                 await self._emit(EventType.CANDIDATE_CREATED, outcome,
                                  payload={"candidate_id": cand.candidate_id,

@@ -6,6 +6,7 @@ Normalizer consumes it; replay fixtures store it verbatim.
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -116,3 +117,27 @@ class RawJob(BaseModel):
     posted_at: Optional[str] = None
     fetched_at: datetime = Field(default_factory=utc_now)
     extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DataCompleteness(str, Enum):
+    """P0.6 数据完整性等级。"""
+    DISCOVERED = "DISCOVERED"   # 仅发现，信息极少
+    PARTIAL = "PARTIAL"         # 部分字段
+    STRUCTURED = "STRUCTURED"   # 结构化但缺验证
+    VERIFIED = "VERIFIED"       # 已验证
+
+
+def field_completeness_score(listing: "RawListing") -> float:
+    """0-1 数据完整度：segments/航班号/时长/经停等字段齐全度。"""
+    total = 0
+    checks = 0
+    for leg_name in ("outbound", "inbound"):
+        leg = getattr(listing, leg_name)
+        total += 1 if leg.segments else 0; checks += 1
+        total += 1 if leg.total_min > 0 else 0; checks += 1
+        total += 1 if leg.stops >= 0 and leg.segments else 0; checks += 1
+        for seg in leg.segments:
+            total += 1 if seg.flight_no else 0; checks += 1
+            total += 1 if seg.airline else 0; checks += 1
+            total += 1 if seg.dep_time else 0; checks += 1
+    return round(total / max(1, checks), 3)

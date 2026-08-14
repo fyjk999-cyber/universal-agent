@@ -19,7 +19,14 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from universal_agent.coordinator.query_planner import FlightQuery
-from universal_agent.core.contracts import RawListing, RawLeg, RawSegment, new_id
+from universal_agent.core.contracts import (
+    DataCompleteness,
+    RawLeg,
+    RawListing,
+    RawSegment,
+    field_completeness_score,
+    new_id,
+)
 
 log = logging.getLogger("ua.adapters.skyscanner")
 
@@ -255,7 +262,11 @@ class SkyscannerAdapter:
     @staticmethod
     def _build_listing(query: FlightQuery, price: float, duration: int,
                        currency: str = "CNY", raw_currency: str = "CNY") -> RawListing:
-        return RawListing(
+        """构造 listing。P0.6 fail-closed：无 segments/航班号 → 标记 PARTIAL，
+        绝不伪造 stops=0（避免不完整数据获得直飞加分）。"""
+        complete = duration > 0
+        completeness = DataCompleteness.STRUCTURED if complete else DataCompleteness.PARTIAL
+        listing = RawListing(
             listing_id=new_id("sky"),
             source="skyscanner",
             marketplace_id="skyscanner",
@@ -267,13 +278,18 @@ class SkyscannerAdapter:
             nights=_date_diff_days(query.depart_date, query.return_date),
             price_cny=price,
             currency=currency,
-            outbound=RawLeg(segments=[], total_min=duration, stops=0),
-            inbound=RawLeg(segments=[], total_min=0, stops=0),
+            # fail-closed: 数据不完整时 stops 用 -1 标记（禁止 0 分加分）
+            outbound=RawLeg(segments=[], total_min=duration,
+                            stops=-1 if not complete else 0),
+            inbound=RawLeg(segments=[], total_min=0, stops=-1 if not complete else 0),
             luggage={},
             extra={"raw_note": "skyscanner parsed card",
                    "duration_min": duration,
-                   "raw_currency": raw_currency},
+                   "raw_currency": raw_currency,
+                   "completeness": completeness.value},
         )
+        listing.extra["field_completeness_score"] = field_completeness_score(listing)
+        return listing
 
 
 def _date_diff_days(d1: str, d2: str) -> int:

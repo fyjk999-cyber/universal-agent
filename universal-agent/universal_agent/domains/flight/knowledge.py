@@ -1,14 +1,36 @@
-"""Flight domain knowledge (RULE 3: domain knows domain facts, not platforms).
+"""Flight Entity Resolution（§21 + P0.7 修复）.
 
-Entity Resolution key (§21) for flights:
-    date | flight_numbers | origin | destination | departure_time
-Two sources seeing the same real object must produce the same key.
+Strong Entity Key：carrier | flight_no | date | segment airports | departure time
+Weak Match：字段不完整时生成弱键，禁止直接 merge。
+
+resolution_confidence:
+  MATCH          → 可合并 Candidate
+  PROBABLE_MATCH → 待确认
+  UNKNOWN        → 不合并
+  CONFLICT       → 禁止合并
 """
 from __future__ import annotations
 
-from typing import List
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Optional
 
 from ...core.contracts import RawListing, RawSegment
+
+
+class ResolutionConfidence(str, Enum):
+    MATCH = "MATCH"
+    PROBABLE_MATCH = "PROBABLE_MATCH"
+    UNKNOWN = "UNKNOWN"
+    CONFLICT = "CONFLICT"
+
+
+@dataclass
+class ResolutionResult:
+    key: str
+    confidence: ResolutionConfidence
+    strong: bool
+    reason: str = ""
 
 
 def flight_numbers(listing: RawListing) -> List[str]:
@@ -19,16 +41,70 @@ def flight_numbers(listing: RawListing) -> List[str]:
     return out
 
 
-def entity_key(listing: RawListing) -> str:
-    """Deterministic entity key: same real itinerary → same key."""
+def _has_complete_segments(listing: RawListing) -> bool:
+    """所有航段都有 flight_no + dep_time + 机场。"""
+    for seg in listing.outbound.segments + listing.inbound.segments:
+        if not seg.flight_no or not seg.dep_time or not seg.dep_airport or not seg.arr_airport:
+            return False
+    return True
+
+
+def strong_entity_key(listing: RawListing) -> Optional[str]:
+    """Strong key：carrier|flight_no|date|seg airports|dep time（P0.7）。"""
+    if not _has_complete_segments(listing):
+        return None
+    parts = []
+    for seg in listing.outbound.segments + listing.inbound.segments:
+        parts.append(f"{seg.airline}{seg.flight_no}")
+        parts.append(seg.dep_airport)
+        parts.append(seg.arr_airport)
+        parts.append(seg.dep_time)
     fns = "|".join(flight_numbers(listing))
-    return "|".join([
-        listing.depart_date,
-        fns,
-        listing.origin_airport,
-        listing.dest_airport,
-        listing.outbound.segments[0].dep_time if listing.outbound.segments else "",
-    ])
+    return "|".join([listing.depart_date, fns, *parts])
+
+
+def weak_entity_key(listing: RawListing) -> str:
+    """Weak key：date|origin|dest（字段不完整时用）。"""
+    return "|".join([listing.depart_date, listing.origin_airport,
+                     listing.dest_airport])
+
+
+def resolve(listing_a: RawListing, listing_b: RawListing) -> ResolutionResult:
+    """P0.7: 判断两 listing 是否同一实体。只有 MATCH 才允许合并。"""
+    ka = strong_entity_key(listing_a)
+    kb = strong_entity_key(listing_b)
+    if ka is not None and kb is not None:
+        if ka == kb:
+            return ResolutionResult(key=ka, confidence=ResolutionConfidence.MATCH,
+                                    strong=True, reason="strong keys equal")
+        # 强键不同 → CONFLICT（同日期同路线不同航班号）
+        if (listing_a.depart_date == listing_b.depart_date
+                and listing_a.origin_airport == listing_b.origin_airport
+                and listing_a.dest_airport == listing_b.dest_airport):
+            return ResolutionResult(key=ka, confidence=ResolutionConfidence.CONFLICT,
+                                    strong=True,
+                                    reason="same route/date but different strong keys")
+        return ResolutionResult(key=ka, confidence=ResolutionConfidence.UNKNOWN,
+                                strong=True, reason="different routes")
+
+    # 至少一个弱键 → PROBABLE_MATCH（不直接 merge）
+    wa = weak_entity_key(listing_a)
+    wb = weak_entity_key(listing_b)
+    if wa == wb:
+        return ResolutionResult(key=wa, confidence=ResolutionConfidence.PROBABLE_MATCH,
+                                strong=False,
+                                reason="weak keys equal; needs detail verification")
+    return ResolutionResult(key=wa, confidence=ResolutionConfidence.UNKNOWN,
+                            strong=False, reason="weak keys differ")
+
+
+def entity_key(listing: RawListing) -> str:
+    """兼容旧接口：优先 strong key，否则 weak key。
+
+    注意：weak key 由调用方结合 resolution_confidence 决定是否 merge。
+    """
+    k = strong_entity_key(listing)
+    return k if k is not None else weak_entity_key(listing)
 
 
 def candidate_attributes(listing: RawListing) -> dict:

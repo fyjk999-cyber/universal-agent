@@ -31,6 +31,8 @@ def _exec_intent(**kw) -> ActionIntent:
         intent_id="x1", action="execute_order", target_key="c1",
         idempotency_key="idem-x1", level=ActionLevel.L4_EXECUTE,
         reversibility=Reversibility.FULL, max_slippage_cny=100,
+        # P0.3: L3/L4 必须携带批准快照（approved vs actual 校验）
+        approved_price_cny=4380.0,
     )
     defaults.update(kw)
     return ActionIntent(**defaults)
@@ -223,7 +225,7 @@ class TestControlledExecutor:
         ex = _executor(tmp_path, policy=p)
         ex.set_executor(lambda intent: ({"order": f"mock-{intent.target_key}"}, []))
         intent = _exec_intent(action="confirm_booking", level=ActionLevel.L3_CONFIRM,
-                              idempotency_key="idem-appr-1")
+                              idempotency_key="idem-appr-1", approved_price_cny=3980.0)
         out1 = ex.execute(intent, confirmed_price=3980)
         assert out1.status == "NEEDS_APPROVAL"
         # 人工审批通过

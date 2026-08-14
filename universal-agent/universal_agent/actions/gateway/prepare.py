@@ -69,20 +69,30 @@ class ActionPreparer:
             raise CapabilityDenied(
                 "IRREVERSIBLE actions cannot PREPARE until L3/L4 gates are enabled")
 
-        # ---- Idempotency (§38) ----
-        existing = self.idempotency.get(intent.idempotency_key)
-        if existing is not None:
+        # ---- Idempotency (§38 + P0.5：reserve/finalize) ----
+        from ..idempotency import DuplicateRequest as _Dup
+        try:
+            self.idempotency.reserve(intent.idempotency_key, action=intent.action,
+                                     target_key=intent.target_key or "")
+        except _Dup:
+            existing = self.idempotency.get(intent.idempotency_key)
             return PrepareOutcome(intent=intent, status="DUPLICATE",
-                                  detail={"existing": existing["result"]})
+                                  detail={"existing": existing.get("result") if existing else {}})
 
-        # ---- Slippage (§39) ----
+        # ---- Slippage 快照记录（P0.3）----
+        # PREPARE 阶段没有 actual checkout price 可比较（自比较无意义）；
+        # 只校验 confirmed_price 合法性并记录到 intent.approved_* 快照，
+        # 真正的 approved vs actual 比较发生在 execute 阶段。
         if confirmed_price is not None:
-            guard = self.slippage.check(
-                confirmed_price, confirmed_price,
-                max_cny=intent.max_slippage_cny,
-                max_percent=intent.max_slippage_percent)
-            if not guard.allowed:
-                raise CapabilityDenied(f"slippage preflight failed: {guard.reason}")
+            if confirmed_price <= 0:
+                raise CapabilityDenied("confirmed_price must be positive")
+            intent.approved_price_cny = confirmed_price
+            intent.approved_at = __import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc)
+            intent.approved_quote_id = (intent.params or {}).get("quote_id")
+            intent.approved_offer_id = (intent.params or {}).get("offer_id")
+            intent.offer_version = (intent.params or {}).get("offer_version")
+            intent.candidate_version = (intent.params or {}).get("candidate_version")
 
         # ---- Skill capability (§43) ----
         if skill_id is not None and intent.action in ("prepare_order", "execute_order"):
@@ -108,11 +118,10 @@ class ActionPreparer:
             result={"approval_id": approval["approval_id"]},
         )
 
-        # 登记 idempotency（PREPARE 完成 = 幂等完成）
-        self.idempotency.register(
-            intent.idempotency_key, action=intent.action,
-            target_key=intent.target_key or "",
-            result={"status": "PREPARED", "approval_id": approval["approval_id"]})
+        # 登记 idempotency（PREPARE 完成 = 幂等完成，P0.5 finalize）
+        self.idempotency.finalize(
+            intent.idempotency_key,
+            {"status": "PREPARED", "approval_id": approval["approval_id"]})
 
         return PrepareOutcome(intent=intent, status="PREPARED",
                               approval=approval,

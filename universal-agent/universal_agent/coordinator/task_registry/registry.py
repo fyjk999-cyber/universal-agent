@@ -69,7 +69,7 @@ class TaskRegistry:
         return [t for t in self._tasks.values() if t.state in alive_states()]
 
     def due_tasks(self, now_str: str) -> List[WatchTask]:
-        """Tasks whose next_scan_at <= now_str (HH:MM or ISO)."""
+        """[DEPRECATED] 字符串比较版本 — 仅兼容旧调用。新代码用 due_tasks_utc。"""
         out = []
         for t in self.active_watches():
             if t.next_scan_at is None:
@@ -77,4 +77,26 @@ class TaskRegistry:
             ts = t.next_scan_at.strftime("%H:%M") if hasattr(t.next_scan_at, "strftime") else ""
             if ts and ts <= now_str:
                 out.append(t)
+        return out
+
+    def due_tasks_utc(self, now: "datetime", max_lookback: int = 0) -> List[str]:
+        """P0.1: 用 datetime 比较判定到期（task.next_scan_at <= now_utc）。
+
+        返回到期 task id 列表。`max_lookback` > 0 时允许补跑最多 N 个
+        错过的扫描窗口（配合 misfire RUN_ONCE/CATCH_UP_LIMITED）。
+        """
+        from datetime import timezone
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        now = now.astimezone(timezone.utc)
+        out: List[str] = []
+        for t in self.active_watches():
+            nxt = t.next_scan_at
+            if nxt is None:
+                continue
+            if nxt.tzinfo is None:
+                nxt = nxt.replace(tzinfo=timezone.utc)
+            nxt = nxt.astimezone(timezone.utc)
+            if nxt <= now:
+                out.append(t.id)
         return out

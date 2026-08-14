@@ -1,27 +1,51 @@
-"""Notification dedup (§34) — fingerprint + material change + cooldown."""
+"""Notification dedup (§34 + P0.8 持久化) — fingerprint + cooldown + restart-safe.
+
+重启后仍然记得已提醒：cooldown 状态持久化到 JSON。
+字段：fingerprint / task_id / candidate_id / trigger_reason / material_state /
+      last_sent_at / cooldown_until（P11 完整化）。
+"""
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 log = logging.getLogger("ua.notifications.dedup")
 
 
 class NotificationDedup:
-    """Suppresses repeat notifications for the same material state.
+    """Suppresses repeat notifications for the same material state (§34)."""
 
-    Rules (§34):
-      - fingerprint = hash(candidate_key + material fields)
-      - identical fingerprint within cooldown → suppress
-      - a *material change* (fingerprint differs) resets cooldown and notifies
-    """
-
-    def __init__(self, cooldown_minutes: int = 720) -> None:
+    def __init__(self, cooldown_minutes: int = 720,
+                 state_path: Optional[Path] = None) -> None:
         self.cooldown = timedelta(minutes=cooldown_minutes)
+        self.state_path = state_path
         self._last: Dict[str, datetime] = {}
+        if state_path is not None:
+            self._load()
+
+    def _load(self) -> None:
+        if self.state_path is not None and self.state_path.exists():
+            try:
+                raw = json.loads(self.state_path.read_text("utf-8"))
+                for fp, iso in raw.items():
+                    try:
+                        self._last[fp] = datetime.fromisoformat(iso)
+                    except ValueError:
+                        continue
+            except Exception:  # noqa: BLE001
+                log.warning("dedup state corrupt; starting empty")
+
+    def _persist(self) -> None:
+        if self.state_path is None:
+            return
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        self.state_path.write_text(
+            json.dumps({fp: ts.isoformat() for fp, ts in self._last.items()}),
+            "utf-8")
 
     @staticmethod
     def fingerprint(task_id: str, target_key: str,
@@ -49,8 +73,8 @@ class NotificationDedup:
         now = now or datetime.now(timezone.utc)
         fp = self.fingerprint(task_id, target_key, material)
         self._last[fp] = now
+        self._persist()
 
     def suppress_count(self) -> int:
-        """Number of currently-cooldown fingerprints (for metrics §52)."""
         now = datetime.now(timezone.utc)
         return sum(1 for t in self._last.values() if now - t < self.cooldown)

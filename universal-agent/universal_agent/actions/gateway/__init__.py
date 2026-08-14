@@ -4,6 +4,7 @@ from __future__ import annotations
 from .execute import ControlledExecutor, ExecOutcome
 from .gateway import ActionGateway
 from .prepare import ActionPreparer, PrepareOutcome
+from .transaction import TransactionExecutor, TxOutcome
 
 __all__ = [
     "ActionGateway",
@@ -11,4 +12,6 @@ __all__ = [
     "ControlledExecutor",
     "ExecOutcome",
     "PrepareOutcome",
+    "TransactionExecutor",
+    "TxOutcome",
 ]

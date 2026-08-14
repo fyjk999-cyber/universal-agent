@@ -24,6 +24,15 @@ class ActionIntent(BaseModel):
     max_slippage_cny: Optional[float] = None  # §39
     max_slippage_percent: Optional[float] = None
 
+    # ---- P0.3: 批准快照（approved vs actual 滑移校验）----
+    approved_quote_id: Optional[str] = None
+    approved_offer_id: Optional[str] = None
+    approved_price_cny: Optional[float] = None
+    approved_at: Optional[datetime] = None
+    approval_expires_at: Optional[datetime] = None
+    offer_version: Optional[str] = None
+    candidate_version: Optional[str] = None
+
 
 class ActionPlan(BaseModel):
     """A decision's plan. Domains build it; nothing executes it directly (§36)."""

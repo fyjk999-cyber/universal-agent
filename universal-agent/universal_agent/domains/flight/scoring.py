@@ -56,7 +56,12 @@ def price_score(price: float, market_min: float) -> float:
 
 
 def stops_score(listing: RawListing) -> float:
-    stops = listing.outbound.stops + listing.inbound.stops
+    """P0.6 fail-closed：stops=-1（数据不完整）→ 不给直飞/短时长加分。"""
+    ob = listing.outbound.stops
+    ib = listing.inbound.stops
+    if ob < 0 or ib < 0:
+        return 50.0  # 数据不完整 → 中性分（不因 stops=0 获得 100 直飞分）
+    stops = ob + ib
     if stops == 0:
         return 100.0
     if stops == 1:
@@ -65,7 +70,12 @@ def stops_score(listing: RawListing) -> float:
 
 
 def layover_score(listing: RawListing, cfg: FlightScoreConfig = DEFAULT_FLIGHT_CFG) -> float:
-    """Worst layover across both directions."""
+    """Worst layover across both directions.
+
+    P0.6 fail-closed：数据不完整（stops<0）→ 中性分 50，不给满分层。
+    """
+    if listing.outbound.stops < 0 or listing.inbound.stops < 0:
+        return 50.0
     worst: Optional[float] = None
 
     def one(leg) -> Optional[float]:
@@ -98,7 +108,11 @@ def layover_score(listing: RawListing, cfg: FlightScoreConfig = DEFAULT_FLIGHT_C
 
 
 def total_time_score(listing: RawListing) -> float:
-    total_h = (listing.outbound.total_min + listing.inbound.total_min) / 60.0
+    """P0.6 fail-closed：总时长缺失（=0）→ 中性分 50，不给短时长满分。"""
+    total_min = listing.outbound.total_min + listing.inbound.total_min
+    if total_min <= 0:
+        return 50.0
+    total_h = total_min / 60.0
     if total_h <= 20:
         return 100.0
     if total_h <= 30:

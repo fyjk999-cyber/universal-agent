@@ -41,25 +41,28 @@ def _preparer(tmp_path) -> ActionPreparer:
 
 
 class TestIdempotency:
-    def test_register_and_duplicate(self, tmp_path):
+    def test_reserve_duplicate_after_finalize(self, tmp_path):
+        """P0.5: finalize 后再次 reserve 同 key → DuplicateRequest。"""
         store = IdempotencyStore(tmp_path)
-        store.register("k1", action="prepare_order", target_key="c1",
-                       result={"status": "PREPARED"})
+        store.reserve("k1", action="prepare_order", target_key="c1")
+        store.finalize("k1", {"status": "PREPARED"})
         assert store.exists("k1")
-        # 同 key 同结果 → 返回已有
-        rec = store.register("k1", action="prepare_order", target_key="c1",
-                             result={"status": "PREPARED"})
-        assert rec["key"] == "k1"
-        # 同 key 不同结果 → DuplicateRequest
         with pytest.raises(DuplicateRequest):
-            store.register("k1", action="prepare_order", target_key="c1",
-                           result={"status": "EXECUTED"})
+            store.reserve("k1", action="prepare_order", target_key="c1")
+
+    def test_reserve_in_flight_allowed(self, tmp_path):
+        """进行中（RESERVED）的 key 可再次 reserve（崩溃恢复场景）。"""
+        store = IdempotencyStore(tmp_path)
+        store.reserve("k1", action="a", target_key="t")
+        rec = store.reserve("k1", action="a", target_key="t")
+        assert rec is not None  # 不抛异常，返回现有
 
     def test_persistence_across_reload(self, tmp_path):
         s1 = IdempotencyStore(tmp_path)
-        s1.register("k", action="a", target_key="t", result={"ok": 1})
+        s1.finalize("k", {"ok": 1})
         s2 = IdempotencyStore(tmp_path)
         assert s2.exists("k")
+        assert s2.status("k").value == "FINALIZED"
 
 
 class TestSlippageGuard:

@@ -10,8 +10,10 @@ from .gateway import (
     ControlledExecutor,
     ExecOutcome,
     PrepareOutcome,
+    TransactionExecutor,
+    TxOutcome,
 )
-from .idempotency import DuplicateRequest, IdempotencyStore
+from .idempotency import DuplicateRequest, IdempotencyStatus, IdempotencyStore
 from .policy import KillSwitch, KillSwitchTripped, PolicyEngine, PolicyRule, PolicyViolation
 from .slippage import SlippageGuard, SlippageResult
 
@@ -26,6 +28,8 @@ __all__ = [
     "CompensationStep",
     "ControlledExecutor",
     "ExecOutcome",
+    "TransactionExecutor",
+    "TxOutcome",
     "KillSwitch",
     "KillSwitchTripped",
     "PolicyEngine",
@@ -34,6 +38,7 @@ __all__ = [
     "ActionResult",
     "ApprovalInbox",
     "DuplicateRequest",
+    "IdempotencyStatus",
     "IdempotencyStore",
     "PrepareOutcome",
     "SlippageGuard",
