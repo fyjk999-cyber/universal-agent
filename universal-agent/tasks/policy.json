@@ -1,0 +1,30 @@
+{
+  "default_deny": true,
+  "rules": [
+    {
+      "action": "execute_order",
+      "level": "L4_EXECUTE",
+      "max_amount_cny": 5000,
+      "requires_approval": true,
+      "note": "机票/酒店订单执行 — 需审批，单笔上限 ¥5000"
+    },
+    {
+      "action": "submit_application",
+      "level": "L3_CONFIRM",
+      "requires_approval": true,
+      "note": "Job 申请提交 — IRREVERSIBLE，最高到 L3 且必须审批"
+    },
+    {
+      "action": "cancel_order",
+      "allowed": false,
+      "note": "黑名单：取消订单默认不允许自动执行"
+    },
+    {
+      "action": "confirm_booking",
+      "level": "L3_CONFIRM",
+      "max_amount_cny": 10000,
+      "requires_approval": true,
+      "note": "确认预订 — 需审批，单笔上限 ¥10000"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+data/
+.pytest_cache/
+*.log
+.DS_Store
+/tmp/
+.ai-memory
+universal-agent/tests/replay/.obs/
+universal-agent/data/

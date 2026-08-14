@@ -1,0 +1,44 @@
+# ============================================================
+# Queenstown Travel Watch — 第一验收任务 (§67)
+# ============================================================
+
+task:
+  id: queenstown-travel-watch
+  type: watch
+  domain: travel
+  schema_version: "1.0"
+
+lifecycle:
+  starts_at: "2026-08-14"
+  expires_at: "2026-09-03"
+
+schedule:
+  timezone: Asia/Shanghai
+  baseline: ["09:00", "15:00", "21:00"]
+  adaptive: true
+
+search_space:
+  origin: [HGH, PVG, SHA]
+  destination: [ZQN]
+  departure:
+    start: "2026-08-30"
+    end: "2026-09-03"
+  nights:
+    min: 6
+    preferred: 7
+    max: 8
+  adults: 1
+
+# ---------------- Trigger (§70) ----------------
+notify_if:
+  price_drop_cny_gte: 300        # attention
+  price_drop_percent_gte: 10     # important
+  historical_low: true           # important
+  opportunity_score_gte: 90      # important
+
+meta:
+  origin: "杭州/上海 → 皇后镇"
+  destinations_label: "Queenstown (ZQN)"
+  max_stops: 1
+  max_layover_min: 480
+  max_total_hours: 40

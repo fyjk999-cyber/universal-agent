@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "universal-agent"
+version = "0.1.0"
+description = "Universal Persistent Watch & Decision Agent - Host-Agnostic, Contract-First, Event-Driven Core"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0,<3",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+# Optional runtime backends (NOT required for Phase 0/1)
+backends = [
+    "apscheduler>=3.10",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["universal_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+# lxml 的 strip_cdata DeprecationWarning 来自第三方库（scrapling 内部），
+# 不影响功能；过滤以保持测试输出干净
+filterwarnings = [
+    "ignore::DeprecationWarning:lxml.html",
+]

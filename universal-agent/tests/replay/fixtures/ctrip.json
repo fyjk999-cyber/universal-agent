@@ -1,0 +1,132 @@
+[
+  {
+    "listing_id": "ctrip-hgh-0831-1",
+    "source": "ctrip",
+    "marketplace_id": "ctrip",
+    "task_id": "queenstown-travel-watch",
+    "origin_airport": "HGH",
+    "dest_airport": "ZQN",
+    "depart_date": "2026-08-31",
+    "return_date": "2026-09-07",
+    "nights": 7,
+    "price_cny": 4380.0,
+    "currency": "CNY",
+    "outbound": {
+      "segments": [
+        {"airline": "CA", "flight_no": "CA451", "dep_airport": "HGH", "arr_airport": "PVG", "dep_time": "08:00", "arr_time": "09:10", "dep_date": "2026-08-31", "arr_date": "2026-08-31", "duration_min": 70, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ288", "dep_airport": "PVG", "arr_airport": "AKL", "dep_time": "14:30", "arr_time": "06:30", "dep_date": "2026-08-31", "arr_date": "2026-09-01", "duration_min": 660, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ611", "dep_airport": "AKL", "arr_airport": "ZQN", "dep_time": "09:00", "arr_time": "10:45", "dep_date": "2026-09-01", "arr_date": "2026-09-01", "duration_min": 105, "cabin": "economy"}
+      ],
+      "total_min": 1025,
+      "stops": 2,
+      "layovers": [320, 150],
+      "layover_airports": ["PVG", "AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "inbound": {
+      "segments": [
+        {"airline": "NZ", "flight_no": "NZ612", "dep_airport": "ZQN", "arr_airport": "AKL", "dep_time": "12:00", "arr_time": "13:45", "dep_date": "2026-09-07", "arr_date": "2026-09-07", "duration_min": 105, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ289", "dep_airport": "AKL", "arr_airport": "PVG", "dep_time": "22:30", "arr_time": "06:00", "dep_date": "2026-09-07", "arr_date": "2026-09-08", "duration_min": 690, "cabin": "economy"},
+        {"airline": "CA", "flight_no": "CA452", "dep_airport": "PVG", "arr_airport": "HGH", "dep_time": "09:30", "arr_time": "10:40", "dep_date": "2026-09-08", "arr_date": "2026-09-08", "duration_min": 70, "cabin": "economy"}
+      ],
+      "total_min": 1015,
+      "stops": 2,
+      "layovers": [525, 210],
+      "layover_airports": ["AKL", "PVG"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "url": "https://flights.ctrip.com/online/list/oneway-hgh-zqn?depdate=2026-08-31",
+    "luggage": {"checked": "2件23kg"},
+    "extra": {"fare_class": "S"}
+  },
+  {
+    "listing_id": "ctrip-pvg-0830-1",
+    "source": "ctrip",
+    "marketplace_id": "ctrip",
+    "task_id": "queenstown-travel-watch",
+    "origin_airport": "PVG",
+    "dest_airport": "ZQN",
+    "depart_date": "2026-08-30",
+    "return_date": "2026-09-06",
+    "nights": 7,
+    "price_cny": 4260.0,
+    "currency": "CNY",
+    "outbound": {
+      "segments": [
+        {"airline": "MU", "flight_no": "MU779", "dep_airport": "PVG", "arr_airport": "AKL", "dep_time": "00:15", "arr_time": "17:30", "dep_date": "2026-08-30", "arr_date": "2026-08-30", "duration_min": 645, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ621", "dep_airport": "AKL", "arr_airport": "ZQN", "dep_time": "19:30", "arr_time": "21:15", "dep_date": "2026-08-30", "arr_date": "2026-08-30", "duration_min": 105, "cabin": "economy"}
+      ],
+      "total_min": 810,
+      "stops": 1,
+      "layovers": [120],
+      "layover_airports": ["AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "inbound": {
+      "segments": [
+        {"airline": "NZ", "flight_no": "NZ622", "dep_airport": "ZQN", "arr_airport": "AKL", "dep_time": "10:00", "arr_time": "11:45", "dep_date": "2026-09-06", "arr_date": "2026-09-06", "duration_min": 105, "cabin": "economy"},
+        {"airline": "MU", "flight_no": "MU780", "dep_airport": "AKL", "arr_airport": "PVG", "dep_time": "21:00", "arr_time": "05:45", "dep_date": "2026-09-06", "arr_date": "2026-09-07", "duration_min": 735, "cabin": "economy"}
+      ],
+      "total_min": 870,
+      "stops": 1,
+      "layovers": [555],
+      "layover_airports": ["AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "url": "https://flights.ctrip.com/online/list/oneway-pvg-zqn?depdate=2026-08-30",
+    "luggage": {"checked": "2件23kg"},
+    "extra": {"fare_class": "K"}
+  },
+  {
+    "listing_id": "ctrip-sha-0831-2",
+    "source": "ctrip",
+    "marketplace_id": "ctrip",
+    "task_id": "queenstown-travel-watch",
+    "origin_airport": "SHA",
+    "dest_airport": "ZQN",
+    "depart_date": "2026-08-31",
+    "return_date": "2026-09-07",
+    "nights": 7,
+    "price_cny": 3980.0,
+    "currency": "CNY",
+    "outbound": {
+      "segments": [
+        {"airline": "CA", "flight_no": "CA451", "dep_airport": "SHA", "arr_airport": "PVG", "dep_time": "07:30", "arr_time": "08:20", "dep_date": "2026-08-31", "arr_date": "2026-08-31", "duration_min": 50, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ288", "dep_airport": "PVG", "arr_airport": "AKL", "dep_time": "14:30", "arr_time": "06:30", "dep_date": "2026-08-31", "arr_date": "2026-09-01", "duration_min": 660, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ611", "dep_airport": "AKL", "arr_airport": "ZQN", "dep_time": "09:00", "arr_time": "10:45", "dep_date": "2026-09-01", "arr_date": "2026-09-01", "duration_min": 105, "cabin": "economy"}
+      ],
+      "total_min": 1115,
+      "stops": 2,
+      "layovers": [370, 150],
+      "layover_airports": ["PVG", "AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "inbound": {
+      "segments": [
+        {"airline": "NZ", "flight_no": "NZ612", "dep_airport": "ZQN", "arr_airport": "AKL", "dep_time": "12:00", "arr_time": "13:45", "dep_date": "2026-09-07", "arr_date": "2026-09-07", "duration_min": 105, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ289", "dep_airport": "AKL", "arr_airport": "PVG", "dep_time": "22:30", "arr_time": "06:00", "dep_date": "2026-09-07", "arr_date": "2026-09-08", "duration_min": 690, "cabin": "economy"},
+        {"airline": "CA", "flight_no": "CA452", "dep_airport": "PVG", "arr_airport": "SHA", "dep_time": "09:00", "arr_time": "09:50", "dep_date": "2026-09-08", "arr_date": "2026-09-08", "duration_min": 50, "cabin": "economy"}
+      ],
+      "total_min": 1015,
+      "stops": 2,
+      "layovers": [525, 180],
+      "layover_airports": ["AKL", "PVG"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "url": "https://flights.ctrip.com/online/list/oneway-sha-zqn?depdate=2026-08-31",
+    "luggage": {"checked": "2件23kg"},
+    "extra": {"fare_class": "S"}
+  }
+]

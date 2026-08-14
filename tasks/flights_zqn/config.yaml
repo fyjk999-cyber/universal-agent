@@ -1,0 +1,71 @@
+# ============================================================
+# flights_zqn 任务配置（皇后镇往返机票扫描）
+# 2026-08-30 ~ 2026-09-05 出发，6~8 晚
+# ============================================================
+
+task:
+  name: flights_zqn
+  schedule: "0 9,15,21 * * *"   # 每天 09:00 / 15:00 / 21:00（本机为北京时间）
+
+origins:
+  - city: 杭州
+    airport: HGH
+    airport_name: 杭州萧山国际机场
+    label: 杭州 HGH
+  - city: 上海
+    airport: PVG
+    airport_name: 上海浦东国际机场
+    label: 上海 PVG
+  - city: 上海
+    airport: SHA
+    airport_name: 上海虹桥国际机场
+    label: 上海 SHA
+
+dest:
+  city: 皇后镇
+  airport: ZQN
+  airport_name: Queenstown Airport
+
+dates:
+  depart_start: "2026-08-30"    # 允许出发最早日期
+  depart_end: "2026-09-05"      # 允许出发最晚日期
+  return_offsets: [6, 7, 8]     # 返程 = 出发 + N 晚（优先 7，其次 6/8）
+  adults: 1
+
+# ---------------- 筛选规则 ----------------
+filters:
+  max_stops: 2                    # 最多两次转机（HGH/SHA→ZQN 2 站转机是常态）
+  max_layover_min: 480            # 单次转机超过 8 小时：除非价格极优否则排除
+  max_total_hours: 40             # 单程总时长超过该值基本排除（除非价格极低）
+  price_ratio_to_reject: 0.25     # 低于市场价 25% 以上视为“异常低价”，需单独校验
+  allow_self_transfer: false      # 不允许自行转机
+  allow_airport_change: false     # 不允许换机场
+
+# ---------------- 性价比评分权重（0~100） ----------------
+scoring:
+  price_weight: 40                # 相对市场最低价的价格得分权重
+  stops_bonus: 15                 # 直飞加分
+  layover_score: 15               # 转机时长合理度
+  total_time_score: 15            # 总旅行时间
+  quality_score: 15               # 航司/行李/时段/风险
+  layover_ideal_min: 90
+  layover_ideal_max: 240
+  layover_accept_min: 60
+  layover_accept_max: 360
+
+# ---------------- 价格提醒阈值 ----------------
+alerts:
+  hot_drop_cny: 300               # ≥ ¥300 下降 → 🔥 值得关注
+  big_drop_cny: 500               # ≥ ¥500 或 ≥10% → 🚨 明显降价
+  big_drop_pct: 10
+
+# ---------------- 数据源 ----------------
+sources:
+  preferred_order: [bing, qunar, ctrip]
+  bing:
+    base: "https://cn.bing.com/travel/flights"
+  qunar:
+    base: "https://flight.qunar.com/international/"
+  ctrip:
+    base: "https://flights.ctrip.com/international/search/"
+  fx_api: "https://open.er-api.com/v6/latest/CNY"

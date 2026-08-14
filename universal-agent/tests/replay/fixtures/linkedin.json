@@ -1,0 +1,53 @@
+[
+  {
+    "job_id": "j1-ai-engineer",
+    "source": "linkedin",
+    "marketplace_id": "linkedin",
+    "task_id": "careerpilot-ai-watch",
+    "title": "AI Engineer (LLM Agents)",
+    "company": "DeepMind Shanghai",
+    "location": "Shanghai, CN",
+    "job_reference": "DM-SH-2026-001",
+    "salary_min_cny": 50000,
+    "salary_max_cny": 80000,
+    "salary_text": "50k-80k CNY/month",
+    "url": "https://www.linkedin.com/jobs/view/1",
+    "skills": ["python", "llm", "agent", "fastapi", "pytorch"],
+    "description": "Build LLM-powered agent systems with FastAPI and PyTorch. Strong NLP background preferred.",
+    "posted_at": "2026-08-10"
+  },
+  {
+    "job_id": "j2-ml-engineer",
+    "source": "linkedin",
+    "marketplace_id": "linkedin",
+    "task_id": "careerpilot-ai-watch",
+    "title": "Machine Learning Engineer",
+    "company": "Alibaba Cloud",
+    "location": "Hangzhou, CN",
+    "job_reference": "ALI-HZ-9981",
+    "salary_min_cny": 40000,
+    "salary_max_cny": 65000,
+    "salary_text": "40k-65k CNY/month",
+    "url": "https://www.linkedin.com/jobs/view/2",
+    "skills": ["python", "sql", "machine learning", "data"],
+    "description": "Build ML pipelines and recommendation systems with Python and SQL.",
+    "posted_at": "2026-08-12"
+  },
+  {
+    "job_id": "j3-backend",
+    "source": "linkedin",
+    "marketplace_id": "linkedin",
+    "task_id": "careerpilot-ai-watch",
+    "title": "Backend Engineer (Python)",
+    "company": "ByteDance",
+    "location": "Beijing, CN",
+    "job_reference": "BTD-BJ-77",
+    "salary_min_cny": 35000,
+    "salary_max_cny": 55000,
+    "salary_text": "35k-55k CNY/month",
+    "url": "https://www.linkedin.com/jobs/view/3",
+    "skills": ["python", "backend", "api", "分布式"],
+    "description": "Backend services with Python, focus on distributed systems.",
+    "posted_at": "2026-08-08"
+  }
+]

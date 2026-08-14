@@ -1,0 +1,88 @@
+[
+  {
+    "listing_id": "fliggy-pvg-0830-1",
+    "source": "fliggy",
+    "marketplace_id": "fliggy",
+    "task_id": "queenstown-travel-watch",
+    "origin_airport": "PVG",
+    "dest_airport": "ZQN",
+    "depart_date": "2026-08-30",
+    "return_date": "2026-09-06",
+    "nights": 7,
+    "price_cny": 4520.0,
+    "currency": "CNY",
+    "outbound": {
+      "segments": [
+        {"airline": "MU", "flight_no": "MU779", "dep_airport": "PVG", "arr_airport": "AKL", "dep_time": "00:15", "arr_time": "17:30", "dep_date": "2026-08-30", "arr_date": "2026-08-30", "duration_min": 645, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ621", "dep_airport": "AKL", "arr_airport": "ZQN", "dep_time": "19:30", "arr_time": "21:15", "dep_date": "2026-08-30", "arr_date": "2026-08-30", "duration_min": 105, "cabin": "economy"}
+      ],
+      "total_min": 810,
+      "stops": 1,
+      "layovers": [120],
+      "layover_airports": ["AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "inbound": {
+      "segments": [
+        {"airline": "NZ", "flight_no": "NZ622", "dep_airport": "ZQN", "arr_airport": "AKL", "dep_time": "10:00", "arr_time": "11:45", "dep_date": "2026-09-06", "arr_date": "2026-09-06", "duration_min": 105, "cabin": "economy"},
+        {"airline": "MU", "flight_no": "MU780", "dep_airport": "AKL", "arr_airport": "PVG", "dep_time": "21:00", "arr_time": "05:45", "dep_date": "2026-09-06", "arr_date": "2026-09-07", "duration_min": 735, "cabin": "economy"}
+      ],
+      "total_min": 870,
+      "stops": 1,
+      "layovers": [555],
+      "layover_airports": ["AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "url": "https://www.fliggy.com/...",
+    "luggage": {"checked": "2件23kg"},
+    "extra": {"fare_class": "K"}
+  },
+  {
+    "listing_id": "fliggy-hgh-0831-2",
+    "source": "fliggy",
+    "marketplace_id": "fliggy",
+    "task_id": "queenstown-travel-watch",
+    "origin_airport": "HGH",
+    "dest_airport": "ZQN",
+    "depart_date": "2026-08-31",
+    "return_date": "2026-09-06",
+    "nights": 6,
+    "price_cny": 5080.0,
+    "currency": "CNY",
+    "outbound": {
+      "segments": [
+        {"airline": "CA", "flight_no": "CA1751", "dep_airport": "HGH", "arr_airport": "CAN", "dep_time": "09:00", "arr_time": "11:20", "dep_date": "2026-08-31", "arr_date": "2026-08-31", "duration_min": 140, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ34", "dep_airport": "CAN", "arr_airport": "AKL", "dep_time": "13:50", "arr_time": "07:10", "dep_date": "2026-08-31", "arr_date": "2026-09-01", "duration_min": 700, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ611", "dep_airport": "AKL", "arr_airport": "ZQN", "dep_time": "09:00", "arr_time": "10:45", "dep_date": "2026-09-01", "arr_date": "2026-09-01", "duration_min": 105, "cabin": "economy"}
+      ],
+      "total_min": 1245,
+      "stops": 2,
+      "layovers": [150, 110],
+      "layover_airports": ["CAN", "AKL"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "inbound": {
+      "segments": [
+        {"airline": "NZ", "flight_no": "NZ612", "dep_airport": "ZQN", "arr_airport": "AKL", "dep_time": "12:00", "arr_time": "13:45", "dep_date": "2026-09-06", "arr_date": "2026-09-06", "duration_min": 105, "cabin": "economy"},
+        {"airline": "NZ", "flight_no": "NZ289", "dep_airport": "AKL", "arr_airport": "PVG", "dep_time": "22:30", "arr_time": "06:00", "dep_date": "2026-09-06", "arr_date": "2026-09-07", "duration_min": 690, "cabin": "economy"},
+        {"airline": "CA", "flight_no": "CA452", "dep_airport": "PVG", "arr_airport": "HGH", "dep_time": "09:30", "arr_time": "10:40", "dep_date": "2026-09-07", "arr_date": "2026-09-07", "duration_min": 70, "cabin": "economy"}
+      ],
+      "total_min": 1015,
+      "stops": 2,
+      "layovers": [525, 210],
+      "layover_airports": ["AKL", "PVG"],
+      "overnight_layover": false,
+      "airport_change": false,
+      "self_transfer": false
+    },
+    "url": "https://www.fliggy.com/...",
+    "luggage": {"checked": "1件23kg"},
+    "extra": {"fare_class": "T"}
+  }
+]

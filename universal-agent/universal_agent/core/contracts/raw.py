@@ -1,0 +1,118 @@
+"""RawListing contract (§19, §47) — the raw observation before normalization.
+
+A raw listing is what a source skill returns. It is NOT yet a Candidate.
+Normalizer consumes it; replay fixtures store it verbatim.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .base import utc_now
+
+
+class RawSegment(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    airline: str
+    flight_no: str
+    dep_airport: str
+    arr_airport: str
+    dep_time: str  # "HH:MM"
+    arr_time: str
+    dep_date: str  # "YYYY-MM-DD"
+    arr_date: str  # "YYYY-MM-DD"
+    duration_min: int
+    cabin: str = "economy"
+
+
+class RawLeg(BaseModel):
+    """One direction of a trip (outbound or inbound)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    segments: List[RawSegment] = Field(default_factory=list)
+    total_min: int = 0
+    stops: int = 0
+    layovers: List[int] = Field(default_factory=list)
+    layover_airports: List[str] = Field(default_factory=list)
+    overnight_layover: bool = False
+    airport_change: bool = False
+    self_transfer: bool = False
+
+
+class RawListing(BaseModel):
+    """A raw round-trip listing from one source (Bing/Trip/Fliggy/...)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    listing_id: str
+    source: str
+    marketplace_id: str
+    task_id: str
+    origin_airport: str
+    dest_airport: str
+    depart_date: str
+    return_date: str
+    nights: int
+    price_cny: float
+    currency: str = "CNY"
+    outbound: RawLeg
+    inbound: RawLeg
+    url: Optional[str] = None
+    luggage: Dict[str, Any] = Field(default_factory=dict)
+    fetched_at: datetime = Field(default_factory=utc_now)
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RawHotel(BaseModel):
+    """A raw hotel room offer from one source (§63)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    hotel_id: str
+    source: str
+    marketplace_id: str
+    task_id: str
+    name: str
+    city: str = ""
+    address: Optional[str] = None
+    brand: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    check_in: str = ""   # YYYY-MM-DD
+    check_out: str = ""  # YYYY-MM-DD
+    nights: int = 0
+    room_name: str = ""          # free text, normalized later
+    price_per_night_cny: float
+    currency: str = "CNY"
+    rating: float = 0.0          # 0-5
+    url: Optional[str] = None
+    fetched_at: datetime = Field(default_factory=utc_now)
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RawJob(BaseModel):
+    """A raw job listing from one source (§64)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    job_id: str
+    source: str
+    marketplace_id: str
+    task_id: str
+    title: str
+    company: str
+    location: str = ""
+    job_reference: Optional[str] = None  # 招聘方职位编号
+    salary_min_cny: Optional[float] = None
+    salary_max_cny: Optional[float] = None
+    salary_text: Optional[str] = None
+    url: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    description: str = ""
+    posted_at: Optional[str] = None
+    fetched_at: datetime = Field(default_factory=utc_now)
+    extra: Dict[str, Any] = Field(default_factory=dict)
