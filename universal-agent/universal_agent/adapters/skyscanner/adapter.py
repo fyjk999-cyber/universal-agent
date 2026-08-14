@@ -262,10 +262,14 @@ class SkyscannerAdapter:
     @staticmethod
     def _build_listing(query: FlightQuery, price: float, duration: int,
                        currency: str = "CNY", raw_currency: str = "CNY") -> RawListing:
-        """构造 listing。P0.6 fail-closed：无 segments/航班号 → 标记 PARTIAL，
-        绝不伪造 stops=0（避免不完整数据获得直飞加分）。"""
-        complete = duration > 0
-        completeness = DataCompleteness.STRUCTURED if complete else DataCompleteness.PARTIAL
+        """构造 listing（P0.9-3 DataCompleteness 修复）。
+
+        search 页只有 price + duration → 只能 PARTIAL（不是 STRUCTURED）。
+        stops 未知 → -1（绝不伪造 0）。
+        只有完整 segments（outbound+inbound + 航班号 + 时间 + 机场）才算
+        STRUCTURED —— 本 adapter 的 search 解析不产生 segments，故始终 PARTIAL；
+        STRUCTURED 由 detail/booking 验证补齐。
+        """
         listing = RawListing(
             listing_id=new_id("sky"),
             source="skyscanner",
@@ -278,15 +282,14 @@ class SkyscannerAdapter:
             nights=_date_diff_days(query.depart_date, query.return_date),
             price_cny=price,
             currency=currency,
-            # fail-closed: 数据不完整时 stops 用 -1 标记（禁止 0 分加分）
-            outbound=RawLeg(segments=[], total_min=duration,
-                            stops=-1 if not complete else 0),
-            inbound=RawLeg(segments=[], total_min=0, stops=-1 if not complete else 0),
+            # P0.9-3: search 解析无完整 segments → 恒 PARTIAL；stops 未知 = -1
+            outbound=RawLeg(segments=[], total_min=duration, stops=-1),
+            inbound=RawLeg(segments=[], total_min=0, stops=-1),
             luggage={},
-            extra={"raw_note": "skyscanner parsed card",
+            extra={"raw_note": "skyscanner parsed card (search-level, partial)",
                    "duration_min": duration,
                    "raw_currency": raw_currency,
-                   "completeness": completeness.value},
+                   "completeness": DataCompleteness.PARTIAL.value},
         )
         listing.extra["field_completeness_score"] = field_completeness_score(listing)
         return listing

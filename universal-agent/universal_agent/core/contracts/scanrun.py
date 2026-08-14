@@ -40,6 +40,9 @@ class ScanRun(BaseModel):
     error_message: Optional[str] = None
     next_retry_at: Optional[datetime] = None
     trace_id: Optional[str] = None
+    # P0.9-1: retry 链（跨重启恢复 retry_count）
+    retry_of_run_id: Optional[str] = None
+    parent_run_id: Optional[str] = None
 
 
 #: 可重试失败类型 → exponential backoff（P0.2）

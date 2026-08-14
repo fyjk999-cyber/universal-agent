@@ -42,9 +42,17 @@ def flight_numbers(listing: RawListing) -> List[str]:
 
 
 def _has_complete_segments(listing: RawListing) -> bool:
-    """所有航段都有 flight_no + dep_time + 机场。"""
+    """P0.9-2: round-trip 必须双方向 segments 都非空 + 全字段完整。
+
+    空列表或仅单程数据 → 一律 False（绝不生成 Strong Entity Key）。
+    """
+    if not listing.outbound.segments:
+        return False
+    if not listing.inbound.segments:
+        return False
     for seg in listing.outbound.segments + listing.inbound.segments:
-        if not seg.flight_no or not seg.dep_time or not seg.dep_airport or not seg.arr_airport:
+        if not seg.flight_no or not seg.dep_time or not seg.dep_airport \
+                or not seg.arr_airport or not seg.dep_date or not seg.arr_date:
             return False
     return True
 

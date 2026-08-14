@@ -60,6 +60,8 @@ class ScanOutcome:
     quotes: List[Quote] = field(default_factory=list)
     raw_listings: List[RawListing] = field(default_factory=list)
     top5: List[RawListing] = field(default_factory=list)
+    # P0.9-4: 初选池（PARTIAL 疑似低价，待验证）— 不等于最终推荐
+    preliminary_top: List[RawListing] = field(default_factory=list)
     opportunity: Optional[OpportunityScore] = None
     verification: Optional[VerificationResult] = None
     notified: bool = False
@@ -74,6 +76,8 @@ class ScanOutcome:
             "quotes": len(self.quotes),
             "top5": [f"{r.origin_airport}→{r.dest_airport} ¥{r.price_cny:.0f}"
                      for r in self.top5],
+            "preliminary_top": [f"{r.origin_airport}→{r.dest_airport} ¥{r.price_cny:.0f}"
+                                for r in self.preliminary_top],
             "notified": self.notified,
         }
 
@@ -166,17 +170,29 @@ class ShadowScanCoordinator:
                 self.observations.record_price(quote, task.id, domain="flight",
                                                entity_key=key)
 
-        # ---- score + rank ----
+        # ---- score + rank（P0.9-4 Eligibility Gate）----
         prices = [r.price_cny for r in raw_listings if r.price_cny > 0]
         market_min = min(prices) if prices else 0.0
         scored: Dict[str, Dict[str, float]] = {}
         for listing in raw_listings:
             res = score_listing(listing, market_min)
             scored[listing.listing_id] = res
-        outcome.top5 = rank_top_n(raw_listings, scored, top_n=5)
+
+        from ...core.contracts import RankEligibility, rank_eligibility
+        # Final Top5 只从 FINAL_ELIGIBLE / ACTION_ELIGIBLE 选出
+        final_pool = [r for r in raw_listings
+                      if rank_eligibility(r) in (RankEligibility.FINAL_ELIGIBLE,
+                                                 RankEligibility.ACTION_ELIGIBLE)]
+        # PARTIAL → 初选池（疑似低价，待验证）
+        preliminary_pool = [r for r in raw_listings
+                            if rank_eligibility(r) == RankEligibility.PRELIMINARY]
+
+        outcome.top5 = rank_top_n(final_pool, scored, top_n=5)
+        outcome.preliminary_top = rank_top_n(preliminary_pool, scored, top_n=5)
         await self._emit(EventType.SCORE_UPDATED, outcome,
                          payload={"market_min": market_min,
-                                  "top5": [r.listing_id for r in outcome.top5]})
+                                  "top5": [r.listing_id for r in outcome.top5],
+                                  "preliminary_top": [r.listing_id for r in outcome.preliminary_top]})
 
         # ---- change detection + opportunity + verification on best candidate ----
         if outcome.quotes:

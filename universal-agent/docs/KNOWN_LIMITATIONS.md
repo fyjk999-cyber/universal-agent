@@ -2,7 +2,19 @@
 
 > 更新：2026-08-14（SPRINT A / P0 完成后）· 基于实际代码审计
 
-## ✅ P0 已修复（SPRINT A）
+## ✅ P0 已修复（SPRINT A + SPRINT A.1）
+
+**SPRINT A.1（P0.9 Correctness Closure）新增修复：**
+1. **ScanRun Retry 真正接入**：retry 由 next_retry_at 驱动；失败后 next_scan_at 推进（不再每 tick 重复）；RunGuard 防 baseline+retry 双启动；retry chain 跨重启
+2. **Empty Segments 不生成 Strong**：round-trip 双方向 segments 都非空 + 全字段校验
+3. **Skyscanner duration-only 恒 PARTIAL**：stops 未知 = -1（不伪造 0）
+4. **Ranking Eligibility Gate**：PARTIAL 不进 Final Top5 / 不产生购买建议 / 不进 ActionPlan（preliminary_top 分离）
+5. **Idempotency Commit Boundary**：RESERVED/COMMITTED/UNKNOWN 必须 reconcile；crash 后不二次执行（CONFIRMED→FINALIZED）
+6. **Approval Snapshot 校验**：expiry/offer/quote/材料变化（行李/日期/乘客/房型）→ REAPPROVAL_REQUIRED
+7. **删除 due_tasks(string)**：生产路径全用 due_tasks_utc
+8. **L3/L4 单一执行路径**：ControlledExecutor → deprecated wrapper 委托 TransactionExecutor
+
+**SPRINT A（P0 基础）修复：**
 
 1. **Scheduler 时区**：BaselineScheduler 改用 IANA `ZoneInfo`（zoneinfo），DST-safe，`resolve_tz` 校验
 2. **due 判定**：`due_tasks_utc` 用 datetime 比较（弃用字符串比较）

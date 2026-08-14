@@ -30,8 +30,8 @@ class TestWatchDaemon:
         t.next_scan_at = now.replace(hour=9, minute=0, second=0, microsecond=0)
         reg.create(t)
         daemon = WatchDaemon(reg, tick_seconds=60)
-        due = daemon.registry.due_tasks("09:00")
-        assert t.id in {x.id for x in due}
+        due = daemon.registry.due_tasks_utc(now)
+        assert t.id in due
 
     @pytest.mark.asyncio
     async def test_tick_runs_due_task(self, tmp_path):

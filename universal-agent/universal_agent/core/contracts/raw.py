@@ -141,3 +141,42 @@ def field_completeness_score(listing: "RawListing") -> float:
             total += 1 if seg.airline else 0; checks += 1
             total += 1 if seg.dep_time else 0; checks += 1
     return round(total / max(1, checks), 3)
+
+
+class RankEligibility(str, Enum):
+    """P0.9-4: Final Ranking Eligibility Gate."""
+    DISCOVERY_ONLY = "DISCOVERY_ONLY"    # DISCOVERED → 仅发现池
+    PRELIMINARY = "PRELIMINARY"          # PARTIAL → 初选池 + 验证队列
+    FINAL_ELIGIBLE = "FINAL_ELIGIBLE"    # STRUCTURED → 最终排行
+    ACTION_ELIGIBLE = "ACTION_ELIGIBLE"  # VERIFIED → 可执行池
+
+
+def _structurally_complete(listing: "RawListing") -> bool:
+    """双方向 segments 完整（round-trip）→ 视为 STRUCTURED 结构级数据。"""
+    if not listing.outbound.segments or not listing.inbound.segments:
+        return False
+    for seg in listing.outbound.segments + listing.inbound.segments:
+        if not seg.flight_no or not seg.dep_time or not seg.dep_airport:
+            return False
+    return True
+
+
+def rank_eligibility(listing: "RawListing") -> RankEligibility:
+    """由 completeness 推导排行资格（P0.9-4）。
+
+    - 显式 VERIFIED → ACTION_ELIGIBLE
+    - 显式 STRUCTURED 或结构完整（双方向 segments）→ FINAL_ELIGIBLE
+    - 显式 PARTIAL → PRELIMINARY（禁止 Final Top5）
+    - 其余 → DISCOVERY_ONLY
+    """
+    comp = listing.extra.get("completeness", None)
+    if comp == DataCompleteness.VERIFIED.value:
+        return RankEligibility.ACTION_ELIGIBLE
+    if comp == DataCompleteness.STRUCTURED.value:
+        return RankEligibility.FINAL_ELIGIBLE
+    if comp == DataCompleteness.PARTIAL.value:
+        return RankEligibility.PRELIMINARY
+    # 未显式标记：结构完整（旧 fixture/完整 detail 数据）→ FINAL_ELIGIBLE
+    if _structurally_complete(listing):
+        return RankEligibility.FINAL_ELIGIBLE
+    return RankEligibility.DISCOVERY_ONLY

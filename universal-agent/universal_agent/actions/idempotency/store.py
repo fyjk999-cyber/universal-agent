@@ -115,10 +115,11 @@ class IdempotencyStore:
                              status=IdempotencyStatus.FAILED)
 
     def unresolved(self) -> list[str]:
-        """UNKNOWN/RESERVED 残留（重启后需 reconcile）。"""
+        """UNKNOWN/RESERVED/COMMITTED 残留（重启后需 reconcile）。"""
         return [k for k, v in self._records.items()
                 if v.get("status") in (IdempotencyStatus.UNKNOWN.value,
-                                       IdempotencyStatus.RESERVED.value)]
+                                       IdempotencyStatus.RESERVED.value,
+                                       IdempotencyStatus.COMMITTED.value)]
 
     def exists(self, key: str) -> bool:
         return key in self._records

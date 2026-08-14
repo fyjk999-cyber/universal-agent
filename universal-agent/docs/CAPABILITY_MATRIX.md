@@ -22,7 +22,7 @@
 | BaselineScheduler（§15） | **PARTIAL** | `coordinator/scheduler/baseline.py` | 4 项 | Replay | **BUG：忽略 task.timezone；用固定 timezone 拼接；无 DST** | **P0.1** |
 | WatchDaemon | **PARTIAL** | `coordinator/scheduler/daemon.py` | 5 项 | Replay | **BUG：due_tasks 用 HH:MM 字符串比较；无 misfire；失败→Watch FAILED** | **P0.1/P0.2** |
 | due_tasks | **BROKEN** | `task_registry/registry.py:71` | 1 项 | Replay | **字符串 `"09:00"<="21:00"` 字典序比较，跨天错** | **P0.1** |
-| ScanRun 状态 | EMPTY | — | 0 | — | **无独立运行状态，平台失败杀死 Watch** | **P0.2** |
+| ScanRun 状态 + Retry | IMPLEMENTED | `scanrun.py` + `daemon._retry_failed_runs` + `runguard.py` | 28 项 | Replay | retry 由 next_retry_at 驱动，backoff 跨重启，RunGuard 防双启动 | — |
 | AdaptiveScheduler | SKELETON | `adaptive.py` | 0 | — | 仅接口 + NoOp | P9 |
 | Checkpoint（§60） | IMPLEMENTED | `checkpoint.py` | 2 项 | Replay | JSON 持久化 | P1 SQLite |
 
@@ -40,8 +40,8 @@
 | Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|
 | Flight normalize | IMPLEMENTED | `domains/flight/normalize.py` | 8 项 | Replay | — | — |
-| Flight entity_key | **BROKEN** | `knowledge.py` | 3 项 | Replay | **航班号缺失时错误合并同日期同路线** | **P0.7** |
-| Flight scoring | IMPLEMENTED | `scoring.py` | 5 项 | Replay | — | — |
+| Flight entity_key | IMPLEMENTED | `knowledge.py` strong/weak + `_has_complete_segments` | 17 项 | Replay | round-trip 双方向非空才 Strong；空/单程/缺字段不 Strong | — |
+| Flight scoring + Ranking Gate | IMPLEMENTED | `scoring.py` + `rank_eligibility` | 13 项 | Replay | PARTIAL 不进 Final Top5，只进 preliminary | — |
 | Hotel domain | IMPLEMENTED | `domains/hotel/*` | 9 项 | Replay | Room/meal 归一化待完整 | P13 |
 | Jobs domain | IMPLEMENTED | `domains/jobs/*` | 12 项 | Replay | 真实源未接 | P14 |
 | Travel Bundle（§28） | IMPLEMENTED | `domains/travel/bundle.py` + `core/bundling` | 5 项 | Replay | 仅 Flight+Hotel | — |
@@ -52,7 +52,7 @@
 | Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|
 | Replay adapter（§47） | IMPLEMENTED | `adapters/replay/` | 5 项 | Replay | 回放数据 | — |
-| Skyscanner（§62） | **PARTIAL** | `adapters/skyscanner/adapter.py` | 12 项 | **Live** | **硬编码 stops=0/无 segments/数据不完整仍评分** | **P0.6** |
+| Skyscanner（§62） | IMPLEMENTED | `adapters/skyscanner/adapter.py` | 17 项 | Live | search 恒 PARTIAL（duration-only 非 STRUCTURED），stops 未知=-1 | — |
 | FX 汇率 | IMPLEMENTED | `adapters/fx/service.py` | 3 项 | Live | 兜底表可能过时 | — |
 | Tier3 官方源 | SKELETON | `adapters/official/` | 4 项 | Replay | NoOp/Stub，无真实航司 | P12.3 |
 | Api/Http/Browser/Mobile adapter | EMPTY | 占位目录 | 0 | — | 未实现 | P7 |
@@ -73,9 +73,9 @@
 | ActionGateway L0/L1 | IMPLEMENTED | `actions/gateway/gateway.py` | 5 项 | n/a | — | — |
 | ActionPreparer L2（§65） | IMPLEMENTED | `prepare.py` | 5 项 | n/a | — | — |
 | ControlledExecutor L3/L4 | IMPLEMENTED | `execute.py` | 9 项 | n/a | — | — |
-| SlippageGuard（§39） | **BROKEN** | `actions/slippage/guard.py` | 3 项 | n/a | **调用方自比较 confirmed vs confirmed** | **P0.3** |
-| Compensation（§37/§40） | **BROKEN** | `actions/compensation/manager.py` | 3 项 | n/a | **成功路径也调 compensate** | **P0.4** |
-| Idempotency（§38） | **PARTIAL** | `actions/idempotency/store.py` | 2 项 | n/a | **无 reserve/finalize/reconcile** | **P0.5** |
+| SlippageGuard（§39） | IMPLEMENTED | `guard.py` approved vs actual | 12 项 | n/a | 材料变化（行李/日期/币种）→ BLOCK | — |
+| Compensation（§37/§40） | IMPLEMENTED | `transaction.py` 成功绝不补偿 | 8 项 | n/a | 仅 FAIL/UNKNOWN 补偿 | — |
+| Idempotency（§38） | IMPLEMENTED | `store.py` + `transaction.reconcile` | 14 项 | n/a | RESERVED/COMMITTED/UNKNOWN 需 reconcile；crash 不二次执行 | — |
 | ApprovalInbox（§41） | IMPLEMENTED | `actions/approval/inbox.py` | 3 项 | n/a | 未接 GUI | — |
 | PolicyEngine | IMPLEMENTED | `actions/policy/engine.py` | 6 项 | n/a | — | — |
 | KillSwitch | IMPLEMENTED | `actions/policy/killswitch.py` | 3 项 | n/a | — | — |

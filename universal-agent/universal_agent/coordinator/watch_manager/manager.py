@@ -82,8 +82,9 @@ class WatchManager:
         self._schedule_next(task)
         return self.registry.update(task)
 
-    def due_tasks(self, now_str: str) -> List[WatchTask]:
-        return self.registry.due_tasks(now_str)
+    def due_tasks_utc(self, now) -> List[str]:
+        """P0.9-7: datetime 比较判定到期（弃用 string 版本）。"""
+        return self.registry.due_tasks_utc(now)
 
     # ---- helpers ----
     def _get(self, task_id: str) -> WatchTask:

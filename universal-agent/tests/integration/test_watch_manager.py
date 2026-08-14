@@ -96,5 +96,5 @@ class TestRestartRecovery:
         from datetime import datetime, timezone
         task.next_scan_at = datetime(2026, 8, 14, 9, 0, tzinfo=timezone.utc)
         reg.update(task)
-        due = reg.due_tasks("09:00")
-        assert task.id in {t.id for t in due}
+        due = reg.due_tasks_utc(datetime(2026, 8, 14, 10, 0, tzinfo=timezone.utc))
+        assert task.id in due

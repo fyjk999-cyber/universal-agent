@@ -46,6 +46,24 @@ class ScanRunRepository:
         self._save()
         return run
 
+    def start_retry(self, task_id: str, parent_run_id: str,
+                    trace_id: Optional[str] = None) -> ScanRun:
+        """P0.9-1: 创建重试 run，继承 parent 的 retry chain（跨重启恢复）。"""
+        parent = self._runs.get(parent_run_id)
+        retry_count = 1
+        if parent is not None:
+            retry_count = parent.retry_count + 1
+        run = ScanRun(
+            run_id=new_id("run"), task_id=task_id,
+            status=ScanRunStatus.RUNNING, attempt=parent.attempt + 1 if parent else 2,
+            retry_count=retry_count,
+            retry_of_run_id=parent_run_id,
+            parent_run_id=parent.parent_run_id or parent_run_id if parent else parent_run_id,
+            trace_id=trace_id)
+        self._runs[run.run_id] = run
+        self._save()
+        return run
+
     def finish(self, run_id: str, status: ScanRunStatus,
                error_type: Optional[str] = None,
                error_message: Optional[str] = None) -> ScanRun:

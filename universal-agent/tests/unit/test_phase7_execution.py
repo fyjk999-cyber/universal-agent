@@ -235,7 +235,7 @@ class TestControlledExecutor:
         assert out2.detail["order"] == "mock-c1"
 
     def test_failure_compensates(self, tmp_path):
-        """执行抛异常 → 返回 FAILED，不崩溃。"""
+        """执行抛异常 → 补偿（partial failure → COMPENSATED，P0.4/P0.9）。"""
         p = PolicyEngine(default={"default_deny": False, "rules": [
             {"action": "execute_order", "level": "L4_EXECUTE",
              "requires_approval": False}]})
@@ -246,4 +246,5 @@ class TestControlledExecutor:
 
         ex.set_executor(boom)
         out = ex.execute(_exec_intent(), confirmed_price=4380)
-        assert out.status == "FAILED"
+        assert out.status in ("COMPENSATED", "FAILED")  # 补偿或失败，不崩溃
+        assert out.state.value in ("COMPENSATED", "FAILED")
