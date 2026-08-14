@@ -1,102 +1,76 @@
-"""HarnessHostAdapter — bridges DeepSeek Harness to the Universal Agent core.
+"""HarnessHostAdapter（P1.6 改造）— 只发 Command，不存 Task 真相。
 
-RULE 1: Core → HostProtocol ← HarnessHostAdapter.
-This adapter contains ZERO business logic; it only maps HostProtocol calls
-onto Harness mechanisms (file persistence in Phase 1, DSH services later).
+P4.3：Host 只做 I/O（通知/审批/上下文/事件桥）；Task 状态操作
+委托 TaskCoordinator → StateMachine → TaskRepository（单一真相源）。
 """
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ...core.contracts import WatchState, WatchTask
-from ...core.state_machine import transition
+from ...core.contracts import WatchTask
+from ...coordinator.task_coordinator import TaskCoordinator, TaskCommandError
 from ..protocol import HostProtocol
 
 log = logging.getLogger("ua.hosts.harness")
 
 
 class HarnessHostAdapter(HostProtocol):
-    """Phase 1 skeleton: JSON-file task persistence under a data dir.
+    """Host 侧薄适配器：Task 真相在 Universal Agent（TaskCoordinator）。
 
-    Later phases can swap the backing store without touching Core.
+    Host 保存的唯一状态：通知/审批转发（通过回调），不保存 Task。
     """
 
-    def __init__(self, data_dir: Path) -> None:
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self._tasks_file = self.data_dir / "tasks.json"
-        self._tasks: Dict[str, Dict[str, Any]] = {}
-        self._load()
+    def __init__(self, data_dir: Optional[Path] = None,
+                 coordinator: Optional[TaskCoordinator] = None) -> None:
+        self.coordinator = coordinator  # 注入或由宿主装配
 
-    # ---- persistence helpers ----
-    def _load(self) -> None:
-        if self._tasks_file.exists():
-            try:
-                self._tasks = json.loads(self._tasks_file.read_text("utf-8"))
-            except json.JSONDecodeError:
-                log.warning("tasks.json corrupt; starting empty")
-
-    def _save(self) -> None:
-        self._tasks_file.write_text(json.dumps(self._tasks, ensure_ascii=False, indent=2), "utf-8")
-
-    def _put(self, task: WatchTask) -> WatchTask:
-        self._tasks[task.id] = task.model_dump(mode="json")
-        self._save()
-        return task
-
-    # ---- HostProtocol ----
+    # ---- HostProtocol：Task 操作委托 Command ----
     def create_task(self, task: WatchTask) -> WatchTask:
-        return self._put(task)
+        if self.coordinator is None:
+            raise TaskCommandError("no TaskCoordinator wired")
+        return self.coordinator.create_watch(task)
 
     def update_task(self, task: WatchTask) -> WatchTask:
-        return self._put(task)
+        if self.coordinator is None:
+            raise TaskCommandError("no TaskCoordinator wired")
+        return self.coordinator.repo.update(task)
 
     def pause_task(self, task_id: str) -> WatchTask:
-        task = self.get_task(task_id)
-        if task is None:
-            raise KeyError(f"task not found: {task_id}")
-        task.state = transition(task.state, WatchState.PAUSED)
-        task.version += 1
-        return self._put(task)
+        if self.coordinator is None:
+            raise TaskCommandError("no TaskCoordinator wired")
+        return self.coordinator.pause(task_id)
 
     def resume_task(self, task_id: str) -> WatchTask:
-        task = self.get_task(task_id)
-        if task is None:
-            raise KeyError(f"task not found: {task_id}")
-        # PAUSED → WATCHING; any other state stays as-is (no-op)
-        if task.state == WatchState.PAUSED:
-            task.state = transition(task.state, WatchState.WATCHING)
-            task.version += 1
-        return self._put(task)
+        if self.coordinator is None:
+            raise TaskCommandError("no TaskCoordinator wired")
+        return self.coordinator.resume(task_id)
 
     def cancel_task(self, task_id: str) -> WatchTask:
-        task = self.get_task(task_id)
-        if task is None:
-            raise KeyError(f"task not found: {task_id}")
-        task.state = transition(task.state, WatchState.CANCELLED)
-        task.version += 1
-        return self._put(task)
+        if self.coordinator is None:
+            raise TaskCommandError("no TaskCoordinator wired")
+        return self.coordinator.cancel(task_id)
 
     def run_task_once(self, task_id: str) -> Dict[str, Any]:
-        # Phase 2 wires this to the real scan pipeline. Skeleton returns status.
         return {"task_id": task_id, "status": "not_implemented"}
 
     def list_tasks(self) -> List[WatchTask]:
-        return [WatchTask.model_validate(v) for v in self._tasks.values()]
+        if self.coordinator is None:
+            return []
+        return self.coordinator.list()
 
     def get_task(self, task_id: str) -> Optional[WatchTask]:
-        raw = self._tasks.get(task_id)
-        return WatchTask.model_validate(raw) if raw is not None else None
+        if self.coordinator is None:
+            return None
+        return self.coordinator.get(task_id)
 
+    # ---- Host I/O（P4.3：Host 只做 I/O）----
     def send_notification(self, notification: Dict[str, Any]) -> None:
         log.info("HARNESS NOTIFICATION: %s", notification.get("title", notification))
 
     def request_approval(self, approval: Dict[str, Any]) -> Dict[str, Any]:
         log.info("HARNESS APPROVAL REQUEST: %s", approval.get("title", approval))
-        # Phase 1: no auto-approval. Return pending (never approve silently).
         return {"approved": False, "status": "pending"}
 
     def get_host_user_context(self) -> Dict[str, Any]:

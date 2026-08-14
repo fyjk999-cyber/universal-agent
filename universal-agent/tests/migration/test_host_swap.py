@@ -24,9 +24,12 @@ from universal_agent.core.contracts import Scope
 class TestJarvisHostSwap:
     def test_swap_requires_zero_core_changes(self, tmp_path: Path, queenstown_watch):
         data_dir = tmp_path / "data"
+        # P1.6: 共享 SQLite 单一真相源；Host 只发 Command
+        from universal_agent.coordinator.task_coordinator import sqlite_task_coordinator
 
         # ---- 1. run under Harness ----
-        harness = HarnessHostAdapter(data_dir=data_dir)
+        coord = sqlite_task_coordinator(data_dir / "ua.db")
+        harness = HarnessHostAdapter(coordinator=coord)
         created = harness.create_task(queenstown_watch)
         assert harness.get_task(created.id) is not None
 
@@ -38,8 +41,9 @@ class TestJarvisHostSwap:
         # ---- 2. STOP harness adapter (simulate host shutdown) ----
         del harness
 
-        # ---- 3. START MockJarvisHostAdapter on SAME data dir ----
-        jarvis = MockJarvisHostAdapter(data_dir=data_dir)
+        # ---- 3. START MockJarvisHostAdapter on SAME SQLite truth ----
+        coord2 = sqlite_task_coordinator(data_dir / "ua.db")
+        jarvis = MockJarvisHostAdapter(coordinator=coord2)
 
         # ---- 4. read the SAME task / memory, continue watch ----
         restored = jarvis.get_task(created.id)
@@ -70,10 +74,13 @@ class TestJarvisHostSwap:
 
     def test_run_task_once_interface_survives_swap(self, tmp_path: Path, queenstown_watch):
         data_dir = tmp_path / "data"
-        h = HarnessHostAdapter(data_dir=data_dir)
+        from universal_agent.coordinator.task_coordinator import sqlite_task_coordinator
+        coord = sqlite_task_coordinator(data_dir / "ua.db")
+        h = HarnessHostAdapter(coordinator=coord)
         h.create_task(queenstown_watch)
         del h
-        j = MockJarvisHostAdapter(data_dir=data_dir)
+        coord2 = sqlite_task_coordinator(data_dir / "ua.db")
+        j = MockJarvisHostAdapter(coordinator=coord2)
         tasks = j.list_tasks()
         assert len(tasks) == 1
         assert j.run_task_once(tasks[0].id)["status"] == "not_implemented"

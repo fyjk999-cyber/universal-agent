@@ -1,8 +1,6 @@
-"""Regression test: host adapters must use the state machine + enum (§14).
+"""Regression test: host adapters use Command mode + state machine (§14, P1.6).
 
-Previously adapters assigned `task.state = "PAUSED"` (string), which
-1) bypassed transition() validation, and 2) triggered Pydantic serializer
-warnings. Now they must transition via the state machine and serialize clean.
+Host adapter 不直接改 state；通过 TaskCoordinator → StateMachine → Repository。
 """
 from __future__ import annotations
 
@@ -20,11 +18,14 @@ from universal_agent.coordinator.task_registry import load_watch_task
 TASK_FILE = Path(__file__).resolve().parent.parent.parent / "tasks" / "queenstown-travel-watch.yaml"
 
 
+def _make_adapter(factory, tmp_path):
+    from universal_agent.coordinator.task_coordinator import sqlite_task_coordinator
+    coord = sqlite_task_coordinator(tmp_path / "ua.db")
+    return factory(coordinator=coord)
+
+
 def _activate(adapter, task_id):
-    task = adapter.get_task(task_id)
-    task.state = WatchState.ACTIVE
-    adapter.update_task(task)
-    return task
+    return adapter.coordinator.activate(task_id)
 
 
 @pytest.mark.parametrize("factory", [
@@ -33,7 +34,7 @@ def _activate(adapter, task_id):
 ])
 class TestAdapterStateMachine:
     def test_pause_uses_enum_and_validates(self, tmp_path, factory):
-        adapter = factory(data_dir=tmp_path / "data")
+        adapter = _make_adapter(factory, tmp_path)
         wt = load_watch_task(TASK_FILE)
         adapter.create_task(wt)
         _activate(adapter, wt.id)
@@ -43,7 +44,7 @@ class TestAdapterStateMachine:
         assert paused.state == WatchState.PAUSED
 
     def test_resume_uses_enum(self, tmp_path, factory):
-        adapter = factory(data_dir=tmp_path / "data")
+        adapter = _make_adapter(factory, tmp_path)
         wt = load_watch_task(TASK_FILE)
         adapter.create_task(wt)
         _activate(adapter, wt.id)
@@ -55,7 +56,7 @@ class TestAdapterStateMachine:
 
     def test_resume_non_paused_is_noop(self, tmp_path, factory):
         """resume_task on a non-PAUSED task must not raise (adapter no-op)."""
-        adapter = factory(data_dir=tmp_path / "data")
+        adapter = _make_adapter(factory, tmp_path)
         wt = load_watch_task(TASK_FILE)
         adapter.create_task(wt)
         _activate(adapter, wt.id)
@@ -64,7 +65,7 @@ class TestAdapterStateMachine:
 
     def test_illegal_transition_raises(self, tmp_path, factory):
         """DRAFT → PAUSED is illegal; must raise TransitionError, not silently pass."""
-        adapter = factory(data_dir=tmp_path / "data")
+        adapter = _make_adapter(factory, tmp_path)
         wt = load_watch_task(TASK_FILE)
         adapter.create_task(wt)  # stays DRAFT
         with pytest.raises(TransitionError):

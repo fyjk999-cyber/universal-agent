@@ -8,7 +8,7 @@
 |---|---|---|---|
 | v0.3 | Architecture / Shadow Runtime | 8 Phase 骨架 + 239 测试 | ✅ 当前 |
 | **v0.4** | **P0 Correctness Hardening** | 时区/misfire/ScanRun/Slippage/Compensation/Idempotency/fail-closed/entity | **进行中** |
-| v0.5 | SQLite + Single Source of Truth | Repository Protocol + 迁移 | 待 P0 |
+| v0.5 | SQLite + Single Source of Truth | Repository Protocol + 迁移 | ✅ 完成（P1） |
 | v0.6 | Reliable Events + Persistent Watch | Outbox + 持久 Notification | 待 P1 |
 | v0.7 | Memory + Notification + Observability | 8 Memory 子域 + Metrics/Traces | 待 P2 |
 | v0.8 | Real Flight Multi-Source | Skyscanner + OTA + Airline Official | 待基础 |

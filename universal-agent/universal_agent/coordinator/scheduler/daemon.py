@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Awaitable, Callable, Dict, Optional
 
 from universal_agent.core.contracts import ScanRunStatus, WatchTask
+from universal_agent.core.state_machine import alive_states
 from universal_agent.coordinator.checkpoint import Checkpoint
 from universal_agent.coordinator.task_registry import TaskRegistry
 from universal_agent.coordinator.task_registry.scanruns import (
@@ -70,6 +71,20 @@ class WatchDaemon:
         # misfire 补跑（RUN_ONCE 默认）
         if self.misfire_policy != "SKIP":
             await self._catch_up_missed(now)
+        # P1.3: ScanRun backoff 到期重试（真实重试循环）
+        await self._retry_failed_runs()
+
+    async def _retry_failed_runs(self) -> None:
+        """对 FAILED_RETRYABLE 且 next_retry_at 已到的 run 重试（backoff 已过）。"""
+        if self.scan_runs is None:
+            return
+        for run in self.scan_runs.retryable():
+            task = self.registry.get(run.task_id)
+            if task is None or task.state not in alive_states():
+                continue  # 任务已取消/过期 → 不再重试
+            log.info("重试任务 %s (run %s, attempt %s)",
+                     run.task_id, run.run_id, run.retry_count + 1)
+            await self._run_task(task, is_retry=True)
 
     async def _catch_up_missed(self, now) -> None:
         from universal_agent.coordinator.scheduler import BaselineScheduler, MisfirePolicy
@@ -83,11 +98,16 @@ class WatchDaemon:
                 log.info("misfire 补跑任务 %s (scheduled %s)", task.id, missed.scheduled_at)
                 await self._run_task(task, is_misfire=True)
 
-    async def _run_task(self, task: WatchTask, is_misfire: bool = False) -> None:
-        # ---- ScanRun 独立状态（P0.2）----
+    async def _run_task(self, task: WatchTask, is_misfire: bool = False,
+                        is_retry: bool = False) -> None:
+        # ---- ScanRun 独立状态（P0.2 / P1.3 重试）----
         run = None
         if self.scan_runs is not None:
-            run = self.scan_runs.start(task.id, attempt=task.scan_count + 1)
+            attempt = task.scan_count + 1
+            if is_retry:
+                last = self.scan_runs.latest_for(task.id)
+                attempt = (last.retry_count + 1) if last else attempt
+            run = self.scan_runs.start(task.id, attempt=attempt)
         if self.checkpoint is not None:
             self.checkpoint.mark_task_started(task.id, cycle=str(task.scan_count + 1))
         try:
