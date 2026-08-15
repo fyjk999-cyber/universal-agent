@@ -82,9 +82,14 @@
     <input id="qDate" type="date" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
     <button onclick="switchQuery()" style="background:var(--blue); color:#0d1117;
       border:none; border-radius:6px; padding:8px 20px; cursor:pointer; font-weight:700;">查询</button>
+    <button onclick="favCurrent()" style="background:var(--panel2); color:var(--text);
+      border:1px solid var(--purple); border-radius:6px; padding:8px 14px; cursor:pointer;">☆ 收藏此线路</button>
     <datalist id="stations"></datalist>
   </div>
+  <div id="favBar" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;"></div>
 </div>
+
+<div id="compare" style="display:none;"></div>
 
 <div id="flow" class="flow"></div>
 
@@ -226,6 +231,7 @@ function renderCycle(cycle) {
 
 let t = 60;
 let currentQuery = {};
+let routes = JSON.parse(localStorage.getItem('ua_routes') || '[]');
 
 async function loadStations() {
   try {
@@ -233,6 +239,85 @@ async function loadStations() {
     $('stations').innerHTML = (s.stations || []).map(x =>
       `<option value="${esc(x)}">`).join('');
   } catch (e) { /* 忽略 */ }
+}
+
+function routeKey(r) { return `${r.from}|${r.to}|${r.date}`; }
+
+function saveRoutes() {
+  localStorage.setItem('ua_routes', JSON.stringify(routes));
+  renderFavs();
+}
+
+function renderFavs() {
+  $('favBar').innerHTML = (routes.length
+    ? routes.map(r => `<span style="display:inline-flex;gap:6px;align-items:center;
+        background:var(--panel2);border:1px solid var(--border);border-radius:999px;
+        padding:4px 12px;font-size:12px;cursor:pointer;" onclick="loadRoute('${routeKey(r)}')"
+        title="点击查看">
+        ${esc(r.from)} → ${esc(r.to)} <span style="color:var(--muted)">${esc(r.date)}</span>
+        <span onclick="event.stopPropagation();removeRoute('${routeKey(r)}')"
+          style="color:var(--danger);cursor:pointer;font-weight:700;">×</span>
+      </span>`).join('')
+    : '<span class="sub">还没有收藏线路，点"☆ 收藏此线路"加入对比</span>');
+  $('favBar').insertAdjacentHTML('beforeend',
+    `<button onclick="compareRoutes()" style="background:var(--purple);color:#0d1117;
+      border:none;border-radius:999px;padding:5px 14px;cursor:pointer;font-weight:700;font-size:12px;">⇄ 对比查看</button>`);
+}
+
+function favCurrent() {
+  const q = {from: $('qFrom').value.trim(), to: $('qTo').value.trim(),
+             date: $('qDate').value};
+  if (!q.from || !q.to || !q.date) { alert('请先填写线路'); return; }
+  if (!routes.some(r => routeKey(r) === routeKey(q))) routes.push(q);
+  saveRoutes();
+}
+
+function loadRoute(key) {
+  const r = routes.find(x => routeKey(x) === key);
+  if (!r) return;
+  $('qFrom').value = r.from; $('qTo').value = r.to; $('qDate').value = r.date;
+  currentQuery = {...r};
+  $('compare').style.display = 'none';
+  $('countdown').textContent = '查询中…';
+  const qs = new URLSearchParams({...r, refresh: '1'}).toString();
+  getJSON('/api/railway?' + qs).then(rail => { renderRailway(rail); t = 60; });
+}
+
+function removeRoute(key) {
+  routes = routes.filter(r => routeKey(r) !== key);
+  saveRoutes();
+}
+
+async function compareRoutes() {
+  if (!routes.length) return;
+  $('compare').style.display = 'block';
+  $('compare').innerHTML = '<div class="empty">对比加载中…</div>';
+  const cards = [];
+  for (const r of routes) {
+    try {
+      const d = await getJSON('/api/railway?' +
+        new URLSearchParams({...r, refresh: '1'}).toString());
+      const rows = (d.ranked || []).slice(0, 3).map(s =>
+        `<tr><td><b>${esc(s.train_no)}</b></td><td>${esc(s.depart)}→${esc(s.arrive)}</td>
+         <td>${esc(s.seat_class)}</td>
+         <td class="avail ${availClass(s.available)}">${esc(s.available_label || s.available)}</td>
+         <td><b>${s.score}</b></td></tr>`).join('');
+      const opp = d.opportunity
+        ? `<div style="color:var(--accent);font-size:12px;margin-top:6px;">🎯 ${esc(d.opportunity.train_no)} ${esc(d.opportunity.seat_class)} 余票 ${esc(d.opportunity.available)}</div>` : '';
+      cards.push(`<div class="panel" style="margin-bottom:0;">
+        <h2>${esc(r.from)} → ${esc(r.to)} <span class="tag">${esc(r.date)} · ${d.raw_count} raw</span></h2>
+        <table><thead><tr><th>车次</th><th>时刻</th><th>座别</th><th>余票</th><th>得分</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" class="empty">无数据</td></tr>'}</tbody></table>${opp}</div>`);
+    } catch (e) {
+      cards.push(`<div class="panel">${esc(r.from)} → ${esc(r.to)} <span class="sub">查询失败</span></div>`);
+    }
+  }
+  $('compare').innerHTML =
+    `<div class="panel" style="background:transparent;border-color:var(--purple);">
+      <h2>⇄ 多线路对比 <span class="tag">Top3 / 线路</span></h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;">
+      ${cards.join('')}</div></div>`;
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 async function refresh() {
@@ -288,6 +373,7 @@ async function switchQuery() {
   $('qTo').value = '杭州东';
   currentQuery = {from: '上海', to: '杭州东', date: $('qDate').value};
   loadStations();
+  renderFavs();
 })();
 
 setInterval(() => {

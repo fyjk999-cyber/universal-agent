@@ -1,0 +1,35 @@
+# ============================================================
+# Railway Watch — 上海 → 杭州东 余票长期监控（12306 真实数据）
+# ============================================================
+
+task:
+  id: railway-shanghai-hangzhou
+  type: watch
+  domain: railway
+  schema_version: "1.0"
+
+lifecycle:
+  starts_at: "2026-08-15"
+  expires_at: "2026-09-30"
+
+schedule:
+  timezone: Asia/Shanghai
+  baseline: ["09:00", "15:00", "21:00"]
+  adaptive: true
+
+search_space:
+  origin: [上海]
+  destination: [杭州东]
+  departure:
+    start: "2026-08-20"
+    end: "2026-08-31"
+  adults: 1
+
+# ---------------- Trigger ----------------
+notify_if:
+  opportunity_score_gte: 85   # 余票可得 + 时刻/历时优时通知
+
+meta:
+  origin: "上海 → 杭州东"
+  destinations_label: "杭州东"
+  max_stops: 0

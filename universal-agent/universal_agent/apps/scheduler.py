@@ -80,10 +80,67 @@ def _flight_runner(fixtures: Path, sources: list[str], live: bool,
     return runner
 
 
+def _railway_runner(notifier=None):
+    """返回一个 task → 执行 Railway(12306) 扫描的 runner。
+
+    非 railway 域任务返回 skipped（多域共存时互不影响）。
+    """
+    from universal_agent.adapters.railway import Railway12306Skill
+    from universal_agent.coordinator.scanner import RailwayScanCoordinator
+    from universal_agent.events import InProcessEventBus
+    from universal_agent.registry import MarketplaceManifest, SkillRegistry
+
+    async def runner(task: WatchTask) -> Dict:
+        if task.domain.value != "railway":
+            return {"skipped": task.domain.value}
+        skill = Railway12306Skill()
+        reg = SkillRegistry()
+        reg.register_marketplace(MarketplaceManifest(
+            id="railway_12306", domains=["railway"], health="HEALTHY",
+            capabilities={"search": True}, trust={"default_score": 0.85}))
+        coord = RailwayScanCoordinator(
+            bus=InProcessEventBus(), registry=reg,
+            fetchers={"railway_12306": skill.fetch}, notifier=notifier, top_n=5)
+        out = await coord.scan(task)
+        return {
+            "domain": "railway",
+            "raw": len(out.raw_railways),
+            "candidates": len(out.candidates),
+            "opportunity": bool(out.opportunity),
+            "notified": out.notified,
+        }
+
+    return runner
+
+
+def _persistent_notifier(data_dir: Path):
+    """FR-031：通知持久化到 SQLite（RULE-003）+ 日志。返回 notifier 回调。"""
+    from universal_agent.persistence import Database, SqliteNotificationRepository
+
+    db = Database(Path(data_dir) / "universal_agent.db")
+    repo = SqliteNotificationRepository(db)
+
+    def notify(notification: Dict) -> None:
+        from universal_agent.hosts.deepseek_harness.adapter import (
+            _notification_fingerprint)
+        fp = notification.get("fingerprint") or _notification_fingerprint(notification)
+        repo.record(fp, str(notification.get("task_id", "")), notification)
+        log.info("NOTIFY[%s] %s", notification.get("event_type", "?"),
+                 notification.get("title", notification))
+
+    return notify
+
+
 async def _run(tasks_dir: Path, data_dir: Path, tick: int,
                domain: str, sources: list[str], live: bool) -> None:
     fixtures = Path(__file__).resolve().parent.parent.parent / "tests" / "replay" / "fixtures"
-    runner = _flight_runner(fixtures, sources, live) if domain == "flight" else None
+    notifier = _persistent_notifier(data_dir)
+    if domain == "flight":
+        runner = _flight_runner(fixtures, sources, live, notifier=notifier)
+    elif domain == "railway":
+        runner = _railway_runner(notifier=notifier)
+    else:
+        raise SystemExit(f"未知 domain: {domain}（flight|railway）")
     daemon = await load_watch_daemon(tasks_dir, data_dir, runner=runner,
                                      tick_seconds=tick)
     try:
