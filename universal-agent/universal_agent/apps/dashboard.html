@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Universal Agent · 可视化看板</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2129; --border:#2d333b;
+    --text:#e6edf3; --muted:#8b949e; --accent:#3fb950; --warn:#d29922;
+    --danger:#f85149; --blue:#58a6ff; --purple:#bc8cff;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    padding:20px; }
+  header { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    margin-bottom:16px; }
+  h1 { font-size:20px; font-weight:700; }
+  .sub { color:var(--muted); font-size:12px; }
+  .pill { padding:4px 12px; border-radius:999px; font-size:12px; font-weight:600; }
+  .pill.ok { background:rgba(63,185,80,.15); color:var(--accent); border:1px solid var(--accent); }
+  .pill.bad { background:rgba(248,81,73,.15); color:var(--danger); border:1px solid var(--danger); }
+  .pill.warn { background:rgba(210,153,34,.15); color:var(--warn); border:1px solid var(--warn); }
+  .flow { display:flex; gap:4px; flex-wrap:wrap; align-items:center;
+    padding:10px 12px; background:var(--panel); border:1px solid var(--border);
+    border-radius:8px; margin-bottom:16px; font-size:11px; color:var(--muted); }
+  .flow .step { padding:3px 8px; border-radius:5px; background:var(--panel2);
+    border:1px solid var(--border); color:var(--blue); }
+  .flow .step.done { color:var(--accent); border-color:var(--accent); }
+  .flow .arrow { color:var(--muted); }
+  .grid { display:grid; grid-template-columns: 1fr 380px; gap:16px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--border);
+    border-radius:10px; padding:16px; margin-bottom:16px; }
+  .panel h2 { font-size:14px; margin-bottom:12px; color:var(--muted);
+    display:flex; justify-content:space-between; align-items:center; }
+  .panel h2 .tag { font-size:11px; font-weight:400; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-weight:500; font-size:11px;
+    padding:6px 8px; border-bottom:1px solid var(--border); }
+  td { padding:8px; border-bottom:1px solid rgba(45,51,59,.5); }
+  tr:hover td { background:var(--panel2); }
+  .scorebar { height:6px; background:var(--panel2); border-radius:3px;
+    overflow:hidden; min-width:70px; }
+  .scorebar > i { display:block; height:100%; background:linear-gradient(90deg,var(--blue),var(--accent)); }
+  .avail { font-weight:600; }
+  .avail.yes { color:var(--accent); }
+  .avail.no { color:var(--danger); }
+  .opp { background:linear-gradient(135deg,rgba(63,185,80,.12),rgba(88,166,255,.08));
+    border:1px solid var(--accent); border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+  .opp h3 { color:var(--accent); font-size:15px; margin-bottom:6px; }
+  .opp .detail { font-size:13px; color:var(--text); line-height:1.7; }
+  .src { display:flex; justify-content:space-between; align-items:center;
+    padding:10px 12px; border:1px solid var(--border); border-radius:8px;
+    margin-bottom:8px; background:var(--panel2); }
+  .src .name { font-weight:600; font-size:13px; }
+  .src .reason { color:var(--muted); font-size:11px; margin-top:2px; }
+  .evt { font-size:11px; color:var(--muted); padding:3px 0; border-bottom:1px dashed var(--border); }
+  .evt b { color:var(--blue); }
+  .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+  .foot { color:var(--muted); font-size:11px; margin-top:16px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Universal Persistent Watch &amp; Decision</h1>
+  <span class="sub">Universal Agent 可视化看板 · Railway(12306) 真实数据</span>
+  <span id="healthPill" class="pill warn">检测中…</span>
+  <span id="countdown" class="sub"></span>
+</header>
+
+<div id="flow" class="flow"></div>
+
+<div class="grid">
+  <div>
+    <div id="oppPanel"></div>
+
+    <div class="panel">
+      <h2>🚆 Railway 实时余票 <span id="railMeta" class="tag"></span></h2>
+      <div id="railTable"></div>
+    </div>
+
+    <div class="panel">
+      <h2>⚙️ 事件流（本次 Scan 触发的事件）</h2>
+      <div id="events"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>🔌 数据源状态</h2>
+      <div id="sources"></div>
+    </div>
+    <div class="panel">
+      <h2>🧠 SPAC 工作循环</h2>
+      <div id="cycle"></div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">Universal Agent · SPAC.md 驱动 · 数据来自 12306 公开接口（无 key）· 刷新间隔 60s</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let railEvents = [];
+
+async function getJSON(url) {
+  const r = await fetch(url, {cache:'no-store'});
+  return r.json();
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function availClass(v) {
+  v = String(v || '').trim();
+  if (v === '' || v === '无' || v === '0') return 'no';
+  return 'yes';
+}
+
+function renderFlow(rail) {
+  const steps = rail && rail.events && rail.events.length
+    ? rail.events.map(e => `<span class="step done">${esc(e)}</span>`)
+    : ['SCAN_REQUESTED','RAW_LISTING_DISCOVERED','CANDIDATE_CREATED',
+       'QUOTE_OBSERVED','SCORE_UPDATED','VERIFICATION_COMPLETED',
+       'OPPORTUNITY_DETECTED','NOTIFICATION_REQUESTED','NOTIFICATION_SENT',
+       'SCAN_COMPLETED'].map(s => `<span class="step">${s}</span>`);
+  $('flow').innerHTML = steps.join('<span class="arrow">→</span>');
+}
+
+function renderHealth(h) {
+  const p = $('healthPill');
+  if (!h || h.healthy === undefined) { p.className='pill warn'; p.textContent='检测中…'; return; }
+  p.className = 'pill ' + (h.healthy ? 'ok' : 'bad');
+  p.textContent = h.healthy ? '● 健康' : '● 异常';
+}
+
+function renderRailway(d) {
+  if (!d || !d.ranked) { $('railTable').innerHTML = '<div class="empty">加载中…</div>'; return; }
+  $('railMeta').textContent =
+    `raw=${d.raw_count} candidates=${d.candidate_count} · ${esc(d.query.from_city)}→${esc(d.query.to_city)} ${esc(d.query.date)}`;
+
+  if (d.opportunity) {
+    const o = d.opportunity;
+    $('oppPanel').innerHTML = `<div class="opp">
+      <h3>🎯 机会检测</h3>
+      <div class="detail">
+        <b>${esc(o.train_no)}</b> ${esc(o.route)} · ${esc(o.depart)}
+        · ${esc(o.seat_class)} 余票=<b>${esc(o.available)}</b>
+        · 得分 <b>${Math.round(o.score)}</b>
+        <br>通知：<b>${d.notified ? '✅ 已投递' : '未投递'}</b>
+        · 验证：<b>${d.verification ? esc(d.verification.status) : '-'}</b>
+      </div></div>`;
+  } else {
+    $('oppPanel').innerHTML = '<div class="panel"><h2>🎯 机会</h2><div class="empty">当前无满足条件的机会（或全部售罄）</div></div>';
+  }
+
+  const rows = d.ranked.map((s, i) => {
+    const a = availClass(s.available);
+    return `<tr>
+      <td>${i+1}</td>
+      <td><b>${esc(s.train_no)}</b></td>
+      <td>${esc(s.depart)} → ${esc(s.arrive)}</td>
+      <td>${esc(s.seat_class)}</td>
+      <td class="avail ${a}">${esc(s.available) || '—'}</td>
+      <td><div class="scorebar"><i style="width:${Math.min(100,s.score)}%"></i></div></td>
+      <td><b>${s.score}</b></td>
+    </tr>`;
+  }).join('');
+  $('railTable').innerHTML = rows
+    ? `<table><thead><tr><th>#</th><th>车次</th><th>时刻</th><th>座别</th><th>余票</th><th>得分</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    : '<div class="empty">暂无数据（12306 限流或不可达）</div>';
+
+  if (d.events && d.events.length) {
+    $('events').innerHTML = d.events.map(e =>
+      `<div class="evt">▶ <b>${esc(e)}</b></div>`).join('');
+  }
+  renderFlow(d);
+}
+
+function renderSources(s) {
+  if (!s || !s.sources) return;
+  $('sources').innerHTML = Object.entries(s.sources).map(([id, h]) => {
+    const cls = h.status === 'HEALTHY' ? 'ok' : (h.status === 'DEGRADED' || h.status === 'AUTH_REQUIRED' ? 'warn' : 'bad');
+    return `<div class="src">
+      <div><div class="name">${esc(id)}</div>
+      <div class="reason">${esc(h.reason || h.status)}</div></div>
+      <span class="pill ${cls}">${esc(h.status)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderCycle(cycle) {
+  if (!cycle) return;
+  $('cycle').innerHTML = cycle.map(s =>
+    `<span class="step">${esc(s)}</span>`).join('<span class="arrow">→</span>');
+}
+
+let t = 60;
+async function refresh() {
+  try {
+    const [health, rail, sources, pipe] = await Promise.all([
+      getJSON('/api/health'), getJSON('/api/railway'),
+      getJSON('/api/sources'), getJSON('/api/pipeline')]);
+    renderHealth(health);
+    renderRailway(rail);
+    renderSources(sources);
+    renderCycle(pipe.cycle);
+    t = 60;
+  } catch (e) {
+    $('healthPill').className = 'pill bad';
+    $('healthPill').textContent = '● 服务不可达';
+  }
+}
+
+setInterval(() => {
+  t -= 1;
+  $('countdown').textContent = t <= 0 ? '刷新中…' : `${t}s 后刷新`;
+  if (t <= 0) refresh();
+}, 1000);
+
+refresh();
+</script>
+</body>
+</html>
