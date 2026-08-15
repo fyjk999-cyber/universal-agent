@@ -46,13 +46,15 @@ class HarnessHostAdapter(HostProtocol):
                  scan_runs=None,
                  notifications=None,
                  notification_sink=None,
-                 approval_inbox=None) -> None:
+                 approval_inbox=None,
+                 task_repo=None) -> None:
         self.coordinator = coordinator  # 注入或由宿主装配
         self.scan_runner = scan_runner  # task → 结果摘要（可选；无则 run_task_once 显式失败）
         self.scan_runs = scan_runs      # ScanRun 仓库（可选；有则记录每次执行）
         self.notifications = notifications      # SQLite 通知仓库（FR-031 持久化，FR-160 跨重启）
         self.notification_sink = notification_sink  # 真实投递通道（可选；无则仅日志）
         self.approval_inbox = approval_inbox  # 审批箱（FR-032：真实创建 + 用户决策）
+        self.task_repo = task_repo  # 调度推进持久化（run_once 成功时更新 task）
 
     # ---- HostProtocol：Task 操作委托 Command ----
     def create_task(self, task: WatchTask) -> WatchTask:
@@ -93,7 +95,8 @@ class HarnessHostAdapter(HostProtocol):
         task = self.coordinator.get(task_id)
         if task is None:
             raise TaskCommandError(f"run_task_once: task not found: {task_id}")
-        return run_once(task, runner=self.scan_runner, scan_runs=self.scan_runs)
+        return run_once(task, runner=self.scan_runner, scan_runs=self.scan_runs,
+                        task_repo=self.task_repo)
 
     def list_tasks(self) -> List[WatchTask]:
         if self.coordinator is None:

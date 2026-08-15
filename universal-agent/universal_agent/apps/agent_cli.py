@@ -172,18 +172,35 @@ def main() -> None:
                         help="FR-032：审批决策入口（配合 --decision）")
     parser.add_argument("--decision", choices=["yes", "no"], default="yes",
                         help="approve 决策：yes=APPROVED / no=REJECTED")
+    parser.add_argument("--health", action="store_true",
+                        help="CH2-2.5：服务健康检查（DB/RepositorySet/Host/状态组件）")
+    parser.add_argument("--data-dir", default="/tmp/ua-svc",
+                        help="服务数据目录（--approve/--health 使用）")
     args = parser.parse_args()
+    if args.health:
+        _health_cli(Path(args.data_dir))
+        return
     if args.approve:
-        _approve_cli(args.approve, args.decision == "yes")
+        _approve_cli(args.approve, args.decision == "yes", Path(args.data_dir))
         return
     asyncio.run(_run(args.domain))
 
 
-def _approve_cli(approval_id: str, approved: bool) -> None:
-    """FR-032：真实审批决策入口（服务装配 → adapter.decide_approval）。"""
-    from pathlib import Path
+def _health_cli(data_dir: Path) -> None:
+    """CH2-2.5：健康检查输出（JSON）。"""
+    import json as _json
     from universal_agent.service import UniversalAgentService
-    svc = UniversalAgentService(Path("/tmp/ua-svc"))
+    svc = UniversalAgentService(data_dir)
+    try:
+        print(_json.dumps(svc.health(), ensure_ascii=False, indent=2))
+    finally:
+        svc.close()
+
+
+def _approve_cli(approval_id: str, approved: bool, data_dir: Path) -> None:
+    """FR-032：真实审批决策入口（服务装配 → adapter.decide_approval）。"""
+    from universal_agent.service import UniversalAgentService
+    svc = UniversalAgentService(data_dir)
     try:
         out = svc.adapter.decide_approval(approval_id, approved)
     except Exception as exc:  # noqa: BLE001 — CLI 友好输出

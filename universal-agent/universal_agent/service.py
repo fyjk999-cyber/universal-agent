@@ -99,6 +99,7 @@ class UniversalAgentService:
                           scan_runs=self.repos.scan_runs,
                           notifications=self.repos.notifications,
                           approval_inbox=self.approval_inbox,
+                          task_repo=self.repos.tasks,
                           scan_runner=scan_runner)
         if host == "deepseek_harness":
             from .hosts.deepseek_harness.adapter import HarnessHostAdapter
@@ -111,3 +112,30 @@ class UniversalAgentService:
 
     def close(self) -> None:
         self.db.close()
+
+    def health(self) -> dict:
+        """CH2-2.5：服务健康检查（DB + RepositorySet 装配 + Host 适配器 + 状态组件）。"""
+        checks: dict = {}
+        ok = True
+        try:
+            self.db.query_one("SELECT 1")
+            checks["db"] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            ok = False
+            checks["db"] = f"fail: {exc}"
+        missing = [name for name in (
+            "tasks", "scan_runs", "memory", "events", "outbox", "observations",
+            "notifications", "approvals", "actions", "audit", "source_health",
+            "idempotency_kv", "dedup_kv", "killswitch_kv")
+            if getattr(self.repos, name, None) is None]
+        checks["repos"] = "missing=" + ",".join(missing) if missing else "ok"
+        ok = ok and not missing
+        checks["host_adapter"] = (
+            "ok" if getattr(self.adapter, "coordinator", None) is not None else "missing")
+        ok = ok and checks["host_adapter"] == "ok"
+        checks["sqlite_runtime_stores"] = "ok" if (
+            self.idempotency is not None and self.notification_dedup is not None
+            and self.killswitch is not None) else "missing"
+        ok = ok and checks["sqlite_runtime_stores"] == "ok"
+        return {"healthy": ok, "host": getattr(self.adapter, "get_host_user_context", lambda: {})()
+                if self.adapter is not None else {}, "checks": checks}

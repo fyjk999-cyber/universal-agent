@@ -31,13 +31,15 @@ class MockJarvisHostAdapter(HostProtocol):
                  scan_runs=None,
                  notifications=None,
                  notification_sink=None,
-                 approval_inbox=None) -> None:
+                 approval_inbox=None,
+                 task_repo=None) -> None:
         self.coordinator = coordinator
         self.scan_runner = scan_runner
         self.scan_runs = scan_runs
         self.notifications = notifications
         self.notification_sink = notification_sink
         self.approval_inbox = approval_inbox
+        self.task_repo = task_repo
 
     # ---- HostProtocol：Task 操作委托 Command ----
     def create_task(self, task: WatchTask) -> WatchTask:
@@ -75,7 +77,8 @@ class MockJarvisHostAdapter(HostProtocol):
         task = self.coordinator.get(task_id)
         if task is None:
             raise TaskCommandError(f"run_task_once: task not found: {task_id}")
-        return run_once(task, runner=self.scan_runner, scan_runs=self.scan_runs)
+        return run_once(task, runner=self.scan_runner, scan_runs=self.scan_runs,
+                        task_repo=self.task_repo)
 
     def list_tasks(self) -> List[WatchTask]:
         if self.coordinator is None:

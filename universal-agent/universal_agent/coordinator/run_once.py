@@ -16,11 +16,13 @@ ScanRunner = Callable[[WatchTask], Awaitable[Dict]]
 
 
 async def run_once_async(task: WatchTask, runner: ScanRunner,
-                         scan_runs=None) -> Dict[str, Any]:
+                         scan_runs=None, task_repo=None) -> Dict[str, Any]:
     """执行一次扫描并记录 ScanRun（异步；供 daemon/事件循环内使用）。
 
     失败语义与 daemon 一致：可重试错误 → FAILED_RETRYABLE（Watch 保持有效），
     致命错误 → FAILED_FATAL。异常向上抛出，由调用方决定如何处理。
+    成功后与 WatchDaemon._advance 同语义推进调度（scan_count/last_scan_at/
+    next_scan_at，基于 task IANA 时区），经 task_repo 持久化。
     """
     run = None
     if scan_runs is not None:
@@ -36,10 +38,26 @@ async def run_once_async(task: WatchTask, runner: ScanRunner,
         raise
     if run is not None:
         scan_runs.finish(run.run_id, ScanRunStatus.SUCCESS)
+    # 推进调度（与 WatchDaemon._advance 一致；经 Core 代码，非 Host 直改）
+    _advance(task, task_repo=task_repo)
     return {"task_id": task.id, "status": "completed", "result": result}
 
 
-def run_once(task: WatchTask, runner: ScanRunner, scan_runs=None) -> Dict[str, Any]:
+def _advance(task: WatchTask, task_repo=None) -> None:
+    """推进 next_scan_at（task IANA 时区）；成功扫描计入 scan_count。"""
+    from datetime import datetime, timezone
+    from universal_agent.coordinator.scheduler import BaselineScheduler
+
+    task.scan_count += 1
+    task.last_scan_at = datetime.now(timezone.utc)
+    run = BaselineScheduler().next_run(task)
+    task.next_scan_at = run.at if run else None
+    if task_repo is not None:
+        task_repo.update(task)
+
+
+def run_once(task: WatchTask, runner: ScanRunner, scan_runs=None,
+             task_repo=None) -> Dict[str, Any]:
     """同步入口（Host 协议层用）。
 
     若调用方已在事件循环内（如 DSH 异步上下文），请使用 `run_once_async`。
@@ -47,6 +65,6 @@ def run_once(task: WatchTask, runner: ScanRunner, scan_runs=None) -> Dict[str, A
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(run_once_async(task, runner, scan_runs))
+        return asyncio.run(run_once_async(task, runner, scan_runs, task_repo))
     raise RuntimeError(
         "run_once() called from a running event loop; use run_once_async() instead")

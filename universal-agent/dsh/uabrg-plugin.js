@@ -166,5 +166,26 @@ return {
     })
 
     harness.handle('ua/scan', async (args) => runScan(String((args && args.domain) || 'flight')))
+
+    // CH2-2.5：健康检查 RPC（agent_cli --health → JSON）
+    harness.handle('ua/health', async () => {
+      try {
+        const spec = shell.resolve({
+          command: PY + ' -m universal_agent.apps.agent_cli --health --data-dir ' +
+            (UA_DATA_DIR || '/tmp/ua-svc'),
+          workdir: UA_ROOT,
+          timeoutMs: 30000,
+        })
+        const result = await shell.run(spec)
+        return {
+          ok: !!(result && result.exitCode === 0),
+          exitCode: result && result.exitCode,
+          health: toStr(result && result.stdout),
+          error: toStr(result && result.stderr) || undefined,
+        }
+      } catch (e) {
+        return { ok: false, error: toStr((e && (e.message || e)) || e) }
+      }
+    })
   },
 }
