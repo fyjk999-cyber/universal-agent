@@ -16,8 +16,8 @@ from .candidate import Candidate, CandidateEnvelope, Offer, Quote
 from .memory import MemoryQuery, MemoryRecord
 from .observation import Evidence, Observation, VerificationResult
 from .raw import (DataCompleteness, RankEligibility, RawHotel, RawJob,
-                      RawLeg, RawListing, RawSegment, field_completeness_score,
-                      rank_eligibility)
+                  RawLeg, RawListing, RawSegment, field_completeness_score,
+                  rank_eligibility, RawRailway, RawProduct, RawDish)
 from .scanrun import ExecutionState, ScanRun, ScanRunStatus, is_retryable
 from .registry import MarketplaceManifest, SkillManifest
 from .scoring import OpportunityScore, ScoreResult, TriggerEvent
@@ -67,6 +67,9 @@ __all__ = [
     "RawLeg",
     "RawListing",
     "RawSegment",
+    "RawRailway",
+    "RawProduct",
+    "RawDish",
     "Reversibility",
     "Schedule",
     "Scope",

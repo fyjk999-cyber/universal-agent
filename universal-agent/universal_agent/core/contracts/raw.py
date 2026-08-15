@@ -180,3 +180,49 @@ def rank_eligibility(listing: "RawListing") -> RankEligibility:
     if _structurally_complete(listing):
         return RankEligibility.FINAL_ELIGIBLE
     return RankEligibility.DISCOVERY_ONLY
+
+
+class RawRailway(BaseModel):
+    """A raw railway trip offer from one source (P17)."""
+    model_config = ConfigDict(extra="allow")
+    railway_id: str
+    source: str
+    marketplace_id: str
+    task_id: str
+    train_no: str
+    origin_city: str = ""
+    dest_city: str = ""
+    depart_date: str = ""   # YYYY-MM-DD
+    depart_time: str = ""   # HH:MM
+    arrive_time: str = ""
+    seat_class: str = ""    # 二等座/一等座/商务座
+    price_cny: float
+    currency: str = "CNY"
+
+
+class RawProduct(BaseModel):
+    """A raw ecommerce product offer (P18)."""
+    model_config = ConfigDict(extra="allow")
+    product_id: str
+    source: str
+    marketplace_id: str
+    task_id: str
+    title: str
+    sku: str = ""           # canonical SKU
+    price_cny: float
+    currency: str = "CNY"
+    stock: Optional[int] = None
+    coupon_discount_cny: float = 0.0
+
+
+class RawDish(BaseModel):
+    """A raw food/dish offer (P19)."""
+    model_config = ConfigDict(extra="allow")
+    dish_id: str
+    source: str
+    marketplace_id: str
+    task_id: str
+    restaurant: str
+    dish_name: str
+    price_cny: float
+    currency: str = "CNY"
