@@ -67,8 +67,24 @@
   <h1>Universal Persistent Watch &amp; Decision</h1>
   <span class="sub">Universal Agent 可视化看板 · Railway(12306) 真实数据</span>
   <span id="healthPill" class="pill warn">检测中…</span>
+  <button id="refreshBtn" onclick="doRefresh()" style="margin-left:auto;
+    background:var(--panel2); color:var(--text); border:1px solid var(--blue);
+    border-radius:6px; padding:6px 16px; cursor:pointer; font-size:13px;">⟳ 刷新</button>
   <span id="countdown" class="sub"></span>
 </header>
+
+<div class="panel" style="padding:12px 16px;">
+  <h2>📍 切换查询（起止站 / 日期）</h2>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+    <input id="qFrom" list="stations" placeholder="出发站（如 上海）" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
+    <span style="color:var(--muted)">→</span>
+    <input id="qTo" list="stations" placeholder="到达站（如 杭州东）" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
+    <input id="qDate" type="date" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
+    <button onclick="switchQuery()" style="background:var(--blue); color:#0d1117;
+      border:none; border-radius:6px; padding:8px 20px; cursor:pointer; font-weight:700;">查询</button>
+    <datalist id="stations"></datalist>
+  </div>
+</div>
 
 <div id="flow" class="flow"></div>
 
@@ -141,7 +157,7 @@ function renderHealth(h) {
 function renderRailway(d) {
   if (!d || !d.ranked) { $('railTable').innerHTML = '<div class="empty">加载中…</div>'; return; }
   $('railMeta').textContent =
-    `raw=${d.raw_count} candidates=${d.candidate_count} · ${esc(d.query.from_city)}→${esc(d.query.to_city)} ${esc(d.query.date)}`;
+    `raw=${d.raw_count} candidates=${d.candidate_count} · ${esc(d.query.from)}→${esc(d.query.to)} ${esc(d.query.date)}`;
 
   if (d.opportunity) {
     const o = d.opportunity;
@@ -160,18 +176,27 @@ function renderRailway(d) {
 
   const rows = d.ranked.map((s, i) => {
     const a = availClass(s.available);
+    const label = s.available_label ? esc(s.available_label) : (esc(s.available) || '—');
+    const price = s.price && typeof s.price === 'object'
+      ? esc(JSON.stringify(s.price)) : '—';
     return `<tr>
       <td>${i+1}</td>
       <td><b>${esc(s.train_no)}</b></td>
       <td>${esc(s.depart)} → ${esc(s.arrive)}</td>
       <td>${esc(s.seat_class)}</td>
-      <td class="avail ${a}">${esc(s.available) || '—'}</td>
+      <td class="avail ${a}" title="${a === 'yes' ? '该座别可预订' : '售罄或不可订'}">${label}</td>
+      <td title="12306 票价接口匿名受限时显示 —">${price}</td>
       <td><div class="scorebar"><i style="width:${Math.min(100,s.score)}%"></i></div></td>
       <td><b>${s.score}</b></td>
     </tr>`;
   }).join('');
   $('railTable').innerHTML = rows
-    ? `<table><thead><tr><th>#</th><th>车次</th><th>时刻</th><th>座别</th><th>余票</th><th>得分</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table><thead><tr><th>#</th><th>车次</th><th>时刻</th><th>座别</th><th>余票</th><th>票价</th><th>得分</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+       余票说明：<b>余N张</b>=实时余票数 · <b>有票</b>=充足 · <b>无票</b>=售罄 ·
+       <b>有票(H3/B4/K2)</b>=12306 座别票额码（首字母为票类标记，非余票数，表示该座别有票）<br>
+       票价说明：<b>—</b>=12306 匿名票价接口受限（返回"系统忙"）；接入登录态/商业接口后显示实时票价
+       </div>`
     : '<div class="empty">暂无数据（12306 限流或不可达）</div>';
 
   if (d.events && d.events.length) {
@@ -200,10 +225,21 @@ function renderCycle(cycle) {
 }
 
 let t = 60;
+let currentQuery = {};
+
+async function loadStations() {
+  try {
+    const s = await getJSON('/api/stations');
+    $('stations').innerHTML = (s.stations || []).map(x =>
+      `<option value="${esc(x)}">`).join('');
+  } catch (e) { /* 忽略 */ }
+}
+
 async function refresh() {
   try {
+    const qs = new URLSearchParams(currentQuery).toString();
     const [health, rail, sources, pipe] = await Promise.all([
-      getJSON('/api/health'), getJSON('/api/railway'),
+      getJSON('/api/health'), getJSON('/api/railway?' + qs),
       getJSON('/api/sources'), getJSON('/api/pipeline')]);
     renderHealth(health);
     renderRailway(rail);
@@ -215,6 +251,44 @@ async function refresh() {
     $('healthPill').textContent = '● 服务不可达';
   }
 }
+
+async function doRefresh() {
+  const qs = new URLSearchParams({...currentQuery, refresh: '1'}).toString();
+  try {
+    const rail = await getJSON('/api/railway?' + qs);
+    renderRailway(rail);
+    t = 60;
+  } catch (e) { /* 下次定时刷新兜底 */ }
+}
+
+async function switchQuery() {
+  const from = $('qFrom').value.trim();
+  const to = $('qTo').value.trim();
+  const date = $('qDate').value;
+  if (!from || !to || !date) { alert('请填写出发站 / 到达站 / 日期'); return; }
+  currentQuery = {from, to, date};
+  $('countdown').textContent = '查询中…';
+  const qs = new URLSearchParams({...currentQuery, refresh: '1'}).toString();
+  try {
+    const rail = await getJSON('/api/railway?' + qs);
+    renderRailway(rail);
+    t = 60;
+  } catch (e) {
+    $('healthPill').className = 'pill bad';
+    $('healthPill').textContent = '● 查询失败';
+  }
+}
+
+// 初始化：默认日期 + 车站列表
+(function init() {
+  const d = new Date();
+  d.setDate(d.getDate() + 15);  // 12306 预售期内
+  $('qDate').value = d.toISOString().slice(0, 10);
+  $('qFrom').value = '上海';
+  $('qTo').value = '杭州东';
+  currentQuery = {from: '上海', to: '杭州东', date: $('qDate').value};
+  loadStations();
+})();
 
 setInterval(() => {
   t -= 1;

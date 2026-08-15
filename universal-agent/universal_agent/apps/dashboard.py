@@ -33,11 +33,11 @@ BASE = Path(__file__).resolve().parent.parent.parent
 HTML_FILE = Path(__file__).resolve().parent / "dashboard.html"
 
 CACHE_TTL = 60  # 秒；12306 查询间隔 >1s，避免限流
-RAILWAY_QUERY = {"from_city": "上海", "to_city": "杭州东", "date": "2026-08-20"}
+DEFAULT_QUERY = {"from": "上海", "to": "杭州东", "date": "2026-08-20"}
 
 
 class ScanCache:
-    """带 TTL 的扫描结果缓存（后台线程刷新，锁保护）。"""
+    """带 TTL 的扫描结果缓存（后台线程刷新，锁保护；按查询参数分桶）。"""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -45,16 +45,18 @@ class ScanCache:
         self._railway_at: float = 0.0
         self._last_error: str = ""
 
-    def railway(self, force: bool = False) -> Dict[str, Any]:
+    def railway(self, query: Dict[str, str] | None = None,
+                force: bool = False) -> Dict[str, Any]:
+        q = {k: (query or {}).get(k) or v for k, v in DEFAULT_QUERY.items()}
         now = time.time()
         with self._lock:
-            if force or (now - self._railway_at) > CACHE_TTL:
-                self._railway_at = now
-            else:
+            fresh = (self._railway.get("query") == q
+                     and (now - self._railway_at) <= CACHE_TTL)
+            if fresh and not force:
                 return self._railway
-        # 在锁外执行扫描（网络调用不应持锁）
+            self._railway_at = now
         try:
-            result = self._scan_railway()
+            result = self._scan_railway(q)
             with self._lock:
                 self._railway = result
                 self._last_error = ""
@@ -66,8 +68,9 @@ class ScanCache:
         return result
 
     @staticmethod
-    def _scan_railway() -> Dict[str, Any]:
+    def _scan_railway(q: Dict[str, str]) -> Dict[str, Any]:
         import asyncio
+        import time as _t
 
         from universal_agent.adapters.railway import Railway12306Skill
         from universal_agent.core.contracts import TaskSpec, TaskType
@@ -92,26 +95,44 @@ class ScanCache:
             task = TaskSpec(id="railway-watch-dashboard", type=TaskType.WATCH,
                             domain="railway",
                             search_space={
-                                "origin": [RAILWAY_QUERY["from_city"]],
-                                "destination": [RAILWAY_QUERY["to_city"]],
-                                "departure": {"start": RAILWAY_QUERY["date"]}})
+                                "origin": [q["from"]],
+                                "destination": [q["to"]],
+                                "departure": {"start": q["date"]}})
             out = await coord.scan(task)
-            return {
-                "source_health": health,
-                "query": RAILWAY_QUERY,
-                "raw_count": len(out.raw_railways),
-                "candidate_count": len(out.candidates),
-                "ranked": [{
-                    "train_no": s["raw"].train_no,
-                    "origin": s["raw"].origin_city,
-                    "dest": s["raw"].dest_city,
-                    "depart": s["raw"].depart_time,
-                    "arrive": s["raw"].arrive_time,
-                    "seat_class": s["raw"].seat_class,
-                    "available": s["raw"].extra.get("available", ""),
+            ranked = []
+            # 实时票价（best-effort：官方票价端点匿名受限；成功才显示，否则 fail-closed）
+            for idx, s in enumerate(out.ranked[:12]):
+                raw = s["raw"]
+                price = None
+                if idx < 3:  # 只对 Top3 尝试票价（限流友好）
+                    tn_id = raw.extra.get("train_no_id", "")
+                    if tn_id:
+                        try:
+                            price = skill.client.query_price(
+                                tn_id, skill.client.code(raw.origin_city),
+                                skill.client.code(raw.dest_city), raw.depart_date)
+                        except Exception:  # noqa: BLE001
+                            price = None
+                    _t.sleep(1.2)
+                ranked.append({
+                    "train_no": raw.train_no,
+                    "origin": raw.origin_city,
+                    "dest": raw.dest_city,
+                    "depart": raw.depart_time,
+                    "arrive": raw.arrive_time,
+                    "seat_class": raw.seat_class,
+                    "available": raw.extra.get("available", ""),
+                    "available_label": raw.extra.get("available_label", ""),
+                    "price": price,
                     "score": round(s["score"], 1),
                     "components": {k: round(v, 1) for k, v in s["components"].items()},
-                } for s in out.ranked[:12]],
+                })
+            return {
+                "source_health": health,
+                "query": q,
+                "raw_count": len(out.raw_railways),
+                "candidate_count": len(out.candidates),
+                "ranked": ranked,
                 "opportunity": out.opportunity,
                 "notified": out.notified,
                 "verification": out.verification,
@@ -138,17 +159,22 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
-        path = self.path.split("?")[0]
+        from urllib.parse import parse_qs, urlparse
+        parsed = urlparse(self.path)
+        path = parsed.path
+        params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         if path == "/":
             self._serve_html()
         elif path == "/api/health":
             self._json(self._health())
         elif path == "/api/railway":
-            self._json(CACHE.railway())
+            self._json(CACHE.railway(params, force=params.pop("refresh", False)))
         elif path == "/api/sources":
             self._json(self._sources())
         elif path == "/api/pipeline":
             self._json(PIPELINE)
+        elif path == "/api/stations":
+            self._json(self._stations())
         else:
             self._json({"error": "not found"}, 404)
 
@@ -173,6 +199,14 @@ class Handler(BaseHTTPRequestHandler):
             return svc.health()
         finally:
             svc.close()
+
+    @staticmethod
+    def _stations() -> Dict[str, Any]:
+        """常用车站（看板切换地址用；完整 3384 站可后续搜索）。"""
+        return {"stations": ["上海", "上海虹桥", "杭州", "杭州东", "杭州西",
+                             "南京", "南京南", "苏州", "北京", "北京南",
+                             "广州", "广州南", "深圳", "深圳北", "成都东",
+                             "重庆北", "武汉", "西安北", "天津", "厦门北"]}
 
     @staticmethod
     def _sources() -> Dict[str, Any]:

@@ -50,6 +50,7 @@ class Railway12306Skill(SkillProtocol):
                     continue
                 out.append({
                     "railway_id": f"{self.marketplace_id}:{t['train_no']}:{seat}",
+                    "train_no_id": t["train_no"],   # 票价端点需要的车次标识
                     "train_no": t["number"],
                     "origin_city": t["from_city"],
                     "dest_city": t["to_city"],
@@ -59,6 +60,7 @@ class Railway12306Skill(SkillProtocol):
                     "duration": t.get("duration", ""),
                     "seat_class": seat,
                     "available": avail,
+                    "available_label": self.client.availability_label(avail),
                 })
         return out
 
@@ -81,7 +83,9 @@ class Railway12306Skill(SkillProtocol):
                     arrive_time=item["arrive_time"], seat_class=item["seat_class"],
                     price_cny=0.0,  # 票价 best-effort（0.0 → 归一化标 UNKNOWN）
                     extra={"available": item.get("available", ""),
-                           "duration": item.get("duration", "")}))
+                           "available_label": item.get("available_label", ""),
+                           "duration": item.get("duration", ""),
+                           "train_no_id": item.get("train_no_id", "")}))
             except Exception as exc:  # noqa: BLE001 — fail-closed
                 log.warning("railway_12306 跳过坏记录 %s: %s",
                             item.get("railway_id"), exc)

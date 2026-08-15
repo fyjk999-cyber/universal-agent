@@ -174,3 +174,18 @@ class Railway12306Client:
             return None
         prices = d.get("price") or d
         return prices if isinstance(prices, dict) else {"price": prices}
+
+    @staticmethod
+    def availability_label(avail: str) -> str:
+        """余票字段语义化（'有'/'0'/'无'/数字/'H3' 等票码）。"""
+        v = str(avail or "").strip()
+        if v in ("", "无"):
+            return "无票"
+        if v == "有":
+            return "有票"
+        if v.isdigit():
+            return "无票" if int(v) == 0 else f"余{int(v)}张"
+        # 'B4'/'H3'/'K2' 等：12306 座别票额码（首个字母=票类标记，非余票数）
+        if v and v[0].isalpha():
+            return f"有票({v})"
+        return f"有票({v})"
