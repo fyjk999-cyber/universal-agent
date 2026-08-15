@@ -1,6 +1,6 @@
 # Universal Agent — Roadmap
 
-> 版本路线（§27 重新定义）· 当前：**v0.7 (Memory) 完成 → v0.7 (Observability) 进行中**
+> 版本路线（§27 重新定义）· 当前：**v0.7 完成（Memory+Observability）→ v0.8 (Flight Live) 进行中**
 
 ## 版本规划
 
@@ -10,7 +10,7 @@
 | **v0.4** | **P0 Correctness Hardening** | 时区/misfire/ScanRun/Slippage/Compensation/Idempotency/fail-closed/entity | ✅ 完成（SPRINT A + A.1，376 tests） |
 | v0.5 | SQLite + Single Source of Truth | Repository Protocol + Runtime Unification（P1.1：RunLease/Host 命令边界/服务装配） | ✅ 完成（P1 + P1.1，401 tests） |
 | v0.6 | Reliable Events + Persistent Watch | SQLite EventStore + Outbox + Dispatcher + Retry + DLQ | ✅ 完成（P2，409 tests） |
-| v0.7 | Memory + Notification + Observability | 8 Memory 子域（P3 完成）+ Metrics/Traces | **进行中（P4）** |
+| v0.7 | Memory + Notification + Observability | 8 Memory 子域（P3）+ Metrics/Traces/Logs（P4） | ✅ 完成（436 tests） |
 | v0.8 | Real Flight Multi-Source | Skyscanner + OTA + Airline Official | 待基础 |
 | v0.9 | Hotel + Travel Bundle Live | Hotel 真源 + 总效用 | 待 P12 |
 | v0.10 | CareerPilot Live | Job 真源 + Answer Memory | 待 P13 |
