@@ -58,6 +58,16 @@ def _flight_runner(fixtures: Path, sources: list[str], live: bool,
                     if ctrip_skill.health_check()["status"] == "HEALTHY" else "DEGRADED"}))
         fetchers["ctrip_http"] = ctrip_skill.fetch
         log.info("ctrip_http 第二 Flight 源已启用（%s）", _os.environ["UA_CTRIP_ENDPOINT"])
+    # CH4（FR-074）：Kiwi Tequila 真实价格 API，UA_KIWI_KEY 配置时启用
+    from universal_agent.adapters.kiwi import (
+        KiwiTequilaFlightSkill, kiwi_marketplace_manifest)
+    if _os.environ.get("UA_KIWI_KEY"):
+        kiwi_skill = KiwiTequilaFlightSkill()
+        h = kiwi_skill.health_check()
+        reg.register_marketplace(kiwi_marketplace_manifest().model_copy(
+            update={"health": h["status"].lower() if h["status"] == "HEALTHY" else "DEGRADED"}))
+        fetchers["kiwi_tequila"] = kiwi_skill.fetch
+        log.info("kiwi_tequila 真实价格源已启用（%s）", kiwi_skill.endpoint)
 
     async def runner(task: WatchTask) -> Dict:
         coord = ShadowScanCoordinator(

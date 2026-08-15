@@ -104,6 +104,7 @@ cd universal-agent
 |---|---|
 | [`SPAC.md`](../SPAC.md) | 产品 + 架构 + 功能需求 Source of Truth（FR/RULE/CHAPTER） |
 | [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md) | 能力矩阵（代码实测） |
+| [`docs/API_SOURCES.md`](docs/API_SOURCES.md) | 真实数据源接入指南（Kiwi Tequila / Ctrip / Booking 端点配置） |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | 版本路线 + SPAC Chapter 完成度 + 下一阶段 |
 | [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) | 已知限制（已解决/当前/设计边界） |
 | [`docs/FINAL_VERIFICATION_REPORT.md`](docs/FINAL_VERIFICATION_REPORT.md) | v1.0 最终验收报告 |

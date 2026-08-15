@@ -68,6 +68,7 @@
 | FX 汇率 | IMPLEMENTED | `adapters/fx/service.py`（缓存+兜底） | 3 | 兜底表可能过时 | — |
 | HTTP Adapter（FR-060，CH4） | IMPLEMENTED | `adapters/http/adapter.py`（超时/重试/失败隔离） | test_ch4（全链路） | — | — |
 | Ctrip Flight 第二源（FR-074） | IMPLEMENTED（结构+测试） | `adapters/ctrip/` CtripFlightSkill（SkillProtocol + HTTP JSON + fail-closed + 健康检查） | test_ch4_multi_source | 真实端点待联调（UA_CTRIP_ENDPOINT） | CH4 联调 |
+| Kiwi Tequila 真实价格源（FR-074） | IMPLEMENTED（管线已通） | `adapters/kiwi/` KiwiTequilaFlightSkill（真实 API；本机实测 401/403 认证语义正确，只差 key） | test_kiwi_source（5 项，含真实端点管线） | 需用户注册 UA_KIWI_KEY（partners.kiwi.com） | 用户注册 key 后联调 |
 | Booking Hotel 源（FR-082） | IMPLEMENTED（结构+测试） | `adapters/booking/` BookingHotelSkill | test_ch4（hotel） | 真实端点待联调（UA_BOOKING_ENDPOINT） | CH4 联调 |
 | API / Browser Adapter（FR-061/062） | **EMPTY** | `adapters/api/`、`adapters/browser/` 仅 `__init__.py`（已核实） | 0 | 未实现（P1） | CH 3.2/3.3 |
 | Mobile Adapter（FR-063） | **EMPTY** | `adapters/mobile/` 仅 `__init__.py`（已核实） | 0 | 连 Protocol 都未定义（P2） | CH 3.4 |
