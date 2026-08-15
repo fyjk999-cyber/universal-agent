@@ -1,7 +1,7 @@
 """Adaptive Scheduler — interface + base rules only (Phase 1, §15).
 
 Full adaptive logic (learned intervals, price-velocity adjustments) lands in
-Phase B/C after Observation history exists. Only the interface is frozen now.
+Phase B/C after Observation history exists. P7 adds RuleAdaptiveScheduler.
 """
 from __future__ import annotations
 
