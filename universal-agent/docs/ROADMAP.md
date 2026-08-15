@@ -1,6 +1,6 @@
 # Universal Agent — Roadmap
 
-> 版本路线（§27 重新定义）· 当前：**P7 Adaptive Watch 完成 → P8 Flight Live**
+> 版本路线（§27 重新定义）· 当前：**P8 Flight Live 完成 → P9 Hotel Live**
 
 ## 版本规划
 
@@ -11,7 +11,7 @@
 | v0.5 | SQLite + Single Source of Truth | Repository Protocol + Runtime Unification（P1.1：RunLease/Host 命令边界/服务装配） | ✅ 完成（P1 + P1.1，401 tests） |
 | v0.6 | Reliable Events + Persistent Watch | SQLite EventStore + Outbox + Dispatcher + Retry + DLQ | ✅ 完成（P2，409 tests） |
 | v0.7 | Memory + Notification + Observability | 8 Memory 子域（P3）+ Metrics/Traces/Logs（P4） | ✅ 完成（436 tests） |
-| v0.8 | Real Flight Multi-Source | Skyscanner + OTA + Airline Official（SkillProtocol 已就绪） | 待 P6-P8 |
+| v0.8 | Real Flight Multi-Source | Skyscanner SkillProtocol 完整（P8） | ✅ 完成（459 tests） |
 | v0.9 | Hotel + Travel Bundle Live | Hotel 真源 + 总效用 | 待 P12 |
 | v0.10 | CareerPilot Live | Job 真源 + Answer Memory | 待 P13 |
 | v0.11 | Security + Controlled Prepare | CredentialVault 等 | 待 P14 |
