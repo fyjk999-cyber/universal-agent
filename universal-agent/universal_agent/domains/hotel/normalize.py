@@ -12,13 +12,14 @@ from ...core.contracts import (
     RawHotel,
     new_id,
 )
-from .knowledge import entity_key, normalize_room
+from .knowledge import entity_key, normalize_policy, normalize_room
 
 
 def normalize_hotel(raw: RawHotel, task_id: str) -> Tuple[Candidate, Offer, Quote, Evidence]:
     """Turn one raw hotel offer into (candidate, offer, quote, price_evidence)."""
     key = entity_key(raw)
     norm = normalize_room(raw.room_name)
+    policy = normalize_policy(raw)  # P9: 政策归一化（breakfast/cancellation/tax/occupancy）
 
     candidate = Candidate(
         candidate_id=new_id("hcand"),
@@ -51,6 +52,11 @@ def normalize_hotel(raw: RawHotel, task_id: str) -> Tuple[Candidate, Offer, Quot
             "room": raw.room_name,
             "room_grade": norm.room_grade,
             "board": norm.board,
+            # P9: 政策
+            "breakfast": policy.breakfast,
+            "cancellation": policy.cancellation,
+            "tax": policy.tax,
+            "occupancy_max": policy.occupancy_max,
         },
         url=raw.url,
     )

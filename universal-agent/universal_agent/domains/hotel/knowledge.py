@@ -32,6 +32,71 @@ class HotelNorm:
     board: str = "none"           # none | breakfast | half | full
 
 
+@dataclass(frozen=True)
+class HotelPolicy:
+    """P9: 政策归一化（早餐/取消/税/入住人数）。未知 → UNKNOWN（fail-closed）。"""
+    breakfast: str = "UNKNOWN"       # included | not_included | UNKNOWN
+    cancellation: str = "UNKNOWN"    # free | non_refundable | free_before_Nh | UNKNOWN
+    tax: Optional[float] = None      # 税率比例（0.15 = 15%）
+    occupancy_max: Optional[int] = None  # 最多入住人数
+
+
+def normalize_policy(raw: "RawHotel") -> HotelPolicy:
+    """从 extra + 房型文本解析政策（P9）。
+
+    未知一律 UNKNOWN（RULE 5：不猜 included/refundable）。
+    优先级：extra 结构化字段 > 房型文本关键词。
+    """
+    extra = raw.extra or {}
+    name = (raw.room_name or "").lower()
+
+    # ---- breakfast ----
+    breakfast = "UNKNOWN"
+    b = str(extra.get("breakfast", "")).lower()
+    if b in ("included", "true", "含早", "yes"):
+        breakfast = "included"
+    elif b in ("not_included", "false", "no", "不含早"):
+        breakfast = "not_included"
+    elif any(k in name for k in ("breakfast", "含早", "早餐")):
+        breakfast = "included"
+
+    # ---- cancellation ----
+    cancellation = "UNKNOWN"
+    c = str(extra.get("cancellation", "")).lower()
+    import re as _re
+    m_free = _re.search(r"free_before_(\d+)h", c)
+    if m_free:
+        cancellation = f"free_before_{m_free.group(1)}h"
+    elif "free" in c or "免费取消" in c or "free cancellation" in name:
+        cancellation = "free"
+    elif "non_refundable" in c or "不可取消" in c or "non-refundable" in name:
+        cancellation = "non_refundable"
+
+    # ---- tax ----
+    tax: Optional[float] = None
+    t = extra.get("tax")
+    if isinstance(t, (int, float)):
+        tax = float(t)
+    elif isinstance(t, str):
+        try:
+            tax = float(t)
+        except ValueError:
+            tax = None
+
+    # ---- occupancy ----
+    occ = extra.get("occupancy")
+    if isinstance(occ, dict):
+        tax_occ = occ.get("max_guests") or occ.get("max")
+        tax_occ = int(tax_occ) if isinstance(tax_occ, (int, float)) else None
+    elif isinstance(occ, (int, float)):
+        tax_occ = int(occ)
+    else:
+        tax_occ = None
+
+    return HotelPolicy(breakfast=breakfast, cancellation=cancellation,
+                       tax=tax, occupancy_max=tax_occ)
+
+
 def normalize_room(room_name: str) -> HotelNorm:
     """Normalize free-text room names to (grade, bed, board).
 
