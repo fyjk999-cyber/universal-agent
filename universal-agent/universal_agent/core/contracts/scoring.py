@@ -34,6 +34,9 @@ class OpportunityScore(ScoreResult):
     candidate_score: float = Field(default=0.0, ge=0.0, le=100.0)
     offer_trust: float = Field(default=0.0, ge=0.0, le=1.0)
     verification_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    # P11: availability（库存风险）+ 预趋势（estimate，非事实）
+    availability: str = "UNKNOWN"   # HIGH | MEDIUM | LOW | UNKNOWN
+    trend: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TriggerEvent(BaseModel):

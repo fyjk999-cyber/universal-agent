@@ -21,6 +21,8 @@ class OpportunityInput:
     offer_trust: float = 0.9
     verification_confidence: float = 0.85
     historical_low_buffer_cny: float = 50.0
+    availability: str = "UNKNOWN"   # P11: HIGH | MEDIUM | LOW | UNKNOWN
+    trend: Optional[dict] = None    # P11: {"momentum":..., "volatility":...} estimate
 
 
 def _percentile(value: float, values: List[float]) -> float:
@@ -47,8 +49,14 @@ def compute_opportunity(inp: OpportunityInput) -> OpportunityScore:
     score_component = inp.candidate_score * 0.25            # up to 25 pts
     trust_component = inp.offer_trust * 20.0                # up to 20 pts
     verif_component = inp.verification_confidence * 15.0    # up to 15 pts
+    # P11: availability（库存风险）→ 机会分提升
+    avail_component = {"LOW": 8.0, "MEDIUM": 4.0, "HIGH": 0.0}.get(inp.availability, 0.0)
     total = min(100.0, low_bonus + drop_component + score_component
-                + trust_component + verif_component)
+                + trust_component + verif_component + avail_component)
+
+    # P11: trend 仅作 estimate 传递，不改变历史判定
+    trend_out = dict(inp.trend or {})
+    trend_out["is_estimate"] = True
 
     return OpportunityScore(
         score_id=new_id("opp"),
@@ -60,6 +68,7 @@ def compute_opportunity(inp: OpportunityInput) -> OpportunityScore:
             "candidate_score": round(score_component, 1),
             "trust": round(trust_component, 1),
             "verification": round(verif_component, 1),
+            "availability": round(avail_component, 1),
         },
         total_score=round(total, 1),
         historical_low=is_hist_low,
@@ -69,4 +78,6 @@ def compute_opportunity(inp: OpportunityInput) -> OpportunityScore:
         candidate_score=inp.candidate_score,
         offer_trust=inp.offer_trust,
         verification_confidence=inp.verification_confidence,
+        availability=inp.availability,
+        trend=trend_out,
     )
