@@ -141,6 +141,20 @@ CREATE TABLE IF NOT EXISTS run_leases (
     heartbeat_at TEXT NOT NULL,
     lease_expires_at TEXT NOT NULL
 );
+
+-- P23（RULE-003）：idempotency / 通知去重 / KillSwitch 状态并入 SQLite
+CREATE TABLE IF NOT EXISTS idempotency (
+    key TEXT PRIMARY KEY,
+    data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notification_dedup (
+    key TEXT PRIMARY KEY,
+    data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS killswitch (
+    key TEXT PRIMARY KEY,
+    data TEXT NOT NULL
+);
 """
 
 

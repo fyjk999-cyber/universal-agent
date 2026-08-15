@@ -7,6 +7,23 @@
 
 ---
 
+## ✅ P23 修复状态（2026-08-15，同日修复）
+
+> 本报告原始审计为 P0 基线。以下 5 项 P0 已于同日（P23 Sprint）RED→GREEN 修复，
+> 测试基线 514 → **532 passed / 0 failed**。原始条目保留在 §3 供追溯。
+
+| P0 条目 | 修复内容 | 验证 |
+|---|---|---|
+| FR-030 run_task_once 桩 | 新增 `coordinator/run_once.py`（run_once/run_once_async + ScanRun 记录）；Harness/Jarvis 双适配器实现；`test_host_swap.py:86` 固化断言已修正 | `tests/unit/test_p23_run_once.py` 4 项 |
+| FR-031 通知仅日志 | 通知持久化 SQLite（`SqliteNotificationRepository`）+ `notification_sink` 投递通道 + ShadowScanCoordinator `notifier` 接线 + FR-164 事件类型（PRICE_DROP/RARE_OPPORTUNITY/AVAILABILITY_CHANGE/WATCH_FAILED/APPROVAL_REQUIRED/ACTION_RESULT） | 3 项 |
+| FR-032 审批固定 pending | `ApprovalInbox` 支持 SQLite 后端（RULE-003）；host `request_approval` 真实创建 + 新增 `decide_approval`（APPROVED/REJECTED 持久化）；`agent_cli --approve <id> --decision yes/no` 入口 | 7 项 |
+| FR-033 DSH 硬编码路径 | `dsh/uabrg-plugin.js` 路径解析：Plugin Config → `UA_ROOT/UA_PYTHON/UA_DATA_DIR/UA_CONFIG` → Auto Discovery → Explicit Failure（零硬编码） | grep 验证无 `/Users/` |
+| RULE-003 JSON 双写 | `RepositorySet` 全量接线（tasks/scan_runs/memory/events/outbox/observations/notifications/approvals/actions/audit/source_health + 3 个 Kv 表）；IdempotencyStore/NotificationDedup/KillSwitch 支持 SQLite 后端（跨重启保持） | 4 项 |
+
+**剩余 P0（1 项，属 CHAPTER 4）**：多源 DoD（FR-074 第二/三 Flight 源 + FR-082 Hotel Live 源）。
+
+---
+
 ## 0. 总体结论
 
 共审计 **89 个 FR**（FR-001~FR-194 中实际定义的条目）与 RULE-001~010、Chapter 0-9。

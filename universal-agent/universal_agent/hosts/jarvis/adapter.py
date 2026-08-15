@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ...core.contracts import WatchTask
+from ...coordinator.run_once import ScanRunner, run_once
 from ...coordinator.task_coordinator import TaskCoordinator, TaskCommandError
+from ..deepseek_harness.adapter import _notification_fingerprint
 from ..protocol import HostProtocol
 
 log = logging.getLogger("ua.hosts.jarvis")
@@ -24,8 +26,18 @@ class MockJarvisHostAdapter(HostProtocol):
     ]
 
     def __init__(self, data_dir: Optional[Path] = None,
-                 coordinator: Optional[TaskCoordinator] = None) -> None:
+                 coordinator: Optional[TaskCoordinator] = None,
+                 scan_runner: Optional[ScanRunner] = None,
+                 scan_runs=None,
+                 notifications=None,
+                 notification_sink=None,
+                 approval_inbox=None) -> None:
         self.coordinator = coordinator
+        self.scan_runner = scan_runner
+        self.scan_runs = scan_runs
+        self.notifications = notifications
+        self.notification_sink = notification_sink
+        self.approval_inbox = approval_inbox
 
     # ---- HostProtocol：Task 操作委托 Command ----
     def create_task(self, task: WatchTask) -> WatchTask:
@@ -55,7 +67,15 @@ class MockJarvisHostAdapter(HostProtocol):
         return self.coordinator.cancel(task_id)
 
     def run_task_once(self, task_id: str) -> Dict[str, Any]:
-        return {"task_id": task_id, "status": "not_implemented"}
+        """FR-030：与 Harness 适配器同契约（Host Swap 后仍可用）。"""
+        if self.coordinator is None:
+            raise TaskCommandError("no TaskCoordinator wired")
+        if self.scan_runner is None:
+            raise TaskCommandError("run_task_once: no scan runner wired (service assembly)")
+        task = self.coordinator.get(task_id)
+        if task is None:
+            raise TaskCommandError(f"run_task_once: task not found: {task_id}")
+        return run_once(task, runner=self.scan_runner, scan_runs=self.scan_runs)
 
     def list_tasks(self) -> List[WatchTask]:
         if self.coordinator is None:
@@ -69,11 +89,37 @@ class MockJarvisHostAdapter(HostProtocol):
 
     # ---- Host I/O ----
     def send_notification(self, notification: Dict[str, Any]) -> None:
-        log.info("JARVIS NOTIFICATION: %s", notification.get("title", notification))
+        """FR-031：与 Harness 适配器同契约（持久化 + 投递通道）。"""
+        if self.notifications is not None:
+            fp = notification.get("fingerprint") or _notification_fingerprint(notification)
+            self.notifications.record(
+                fp, str(notification.get("task_id", "")), notification)
+        if self.notification_sink is not None:
+            self.notification_sink(notification)
+            return
+        log.info("JARVIS NOTIFICATION (no sink): %s",
+                 notification.get("title", notification))
 
     def request_approval(self, approval: Dict[str, Any]) -> Dict[str, Any]:
-        log.info("JARVIS APPROVAL REQUEST: %s", approval.get("title", approval))
-        return {"approved": False, "status": "pending"}
+        """FR-032：与 Harness 适配器同契约（真实创建 + 真实决策入口）。"""
+        if self.approval_inbox is None:
+            raise TaskCommandError(
+                "request_approval: no approval inbox wired (service assembly)")
+        item = self.approval_inbox.request(
+            approval_type=str(approval.get("type", "purchase")),
+            title=str(approval.get("title", "approval")),
+            payload=approval.get("payload"),
+            task_id=str(approval.get("task_id", "")) or None)
+        return {"approval_id": item["approval_id"], "status": item["status"],
+                "approved": None, "title": item["title"]}
+
+    def decide_approval(self, approval_id: str, approved: bool) -> Dict[str, Any]:
+        """FR-032：用户决策入口（Host Swap 后同一契约）。"""
+        if self.approval_inbox is None:
+            raise TaskCommandError("decide_approval: no approval inbox wired")
+        item = self.approval_inbox.decide(approval_id, approved)
+        return {"approval_id": item["approval_id"], "status": item["status"],
+                "approved": item["decision"]}
 
     def get_host_user_context(self) -> Dict[str, Any]:
         return {"host": "jarvis", "timezone": "Asia/Shanghai"}

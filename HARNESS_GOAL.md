@@ -7,12 +7,12 @@
 ## 1. 当前运行时状态（SPAC §51）
 
 ```
-PROJECT_STATUS:      DEVELOPMENT（514 tests 全绿；SPAC 硬性点 P0×6 + P1×15 未达成——2026-08-15 深度审计修正，v1.0 验收结论过高）
-CURRENT_CHAPTER:     CHAPTER 2 — DeepSeek Harness Production Integration（P0 收敛起点）
-CURRENT_SUBCHAPTER:  2.1 run_task_once 真实实现（待开始）
-LAST_TEST_STATUS:    PASS（514 passed / 0 failed）
+PROJECT_STATUS:      DEVELOPMENT（532 tests 全绿；P0×6 中 5 项已修复（FR-030~033 + RULE-003），余多源 DoD 属 CH4）
+CURRENT_CHAPTER:     CHAPTER 2 — DeepSeek Harness Production Integration（2.1-2.4 ✅）
+CURRENT_SUBCHAPTER:  2.5 安装/reload/healthcheck（待开始）
+LAST_TEST_STATUS:    PASS（532 passed / 0 failed）
 BLOCKERS:            NONE
-NEXT_ACTION:         P0 收敛：FR-030 run_task_once → FR-031 通知 → FR-032 审批 → FR-033 Bridge 可移植 → RULE-003 接线 → CH2 Gate（§36 Acceptance Flow）
+NEXT_ACTION:         CH2 2.5/2.6 验收（§36 Acceptance Flow）→ 门禁 → commit+push → CH4 多源 DoD
 GLOBAL_TEST_REQUIRED: TRUE（每次大 Chapter 后全量回归）
 ```
 

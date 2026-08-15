@@ -21,8 +21,12 @@ from universal_agent.core.contracts import WatchTask
 log = logging.getLogger("ua.apps.scheduler")
 
 
-def _flight_runner(fixtures: Path, sources: list[str], live: bool):
-    """返回一个 task → 执行 flight 扫描的 runner。"""
+def _flight_runner(fixtures: Path, sources: list[str], live: bool,
+                   notifier=None):
+    """返回一个 task → 执行 flight 扫描的 runner。
+
+    notifier（FR-031）：机会通知真实投递回调（host send_notification），可选。
+    """
     from universal_agent.adapters.replay import make_fetchers
     from universal_agent.adapters.skyscanner import (
         SkyscannerAdapter, SkyscannerConfig, skyscanner_marketplace_manifest)
@@ -48,7 +52,7 @@ def _flight_runner(fixtures: Path, sources: list[str], live: bool):
         coord = ShadowScanCoordinator(
             bus=InProcessEventBus(), registry=reg,
             observations=ObservationStore(Path("/tmp/ua-sched-obs")),
-            fetchers=fetchers, max_queries=10)
+            fetchers=fetchers, max_queries=10, notifier=notifier)
         outcome = await coord.scan(task)
         return outcome.summary()
 

@@ -115,3 +115,16 @@
 | 28 项 Final Acceptance Criteria 全部满足 | **过高**：TEST A–J 通过 ≠ SPAC 硬性点全部达成；按 SPAC §53 Definition of Done，**PROJECT_STATUS = DEVELOPMENT**（Notify/Approve 未真实送达、多源未达标、RULE-003 未闭环） | `MISSING_FEATURE_REPORT.md` §1/§3 |
 
 **修正后结论**：v1.0 的 514 tests 与 TEST A–J 仍有效（启动/生命周期/安全边界）；但 **SPAC 硬性点存在 6×P0 + 15×P1 未达成**，真实状态为 **PROJECT_STATUS = DEVELOPMENT**。下一阶段按 P0 收敛顺序执行（CH2 FR-030~033 → RULE-003 接线 → 多源 DoD → CH1 Gate）。
+
+## ✅ P23 收敛更新（2026-08-15 同日）
+
+上表 6 项 P0 中 **5 项已修复**（测试基线 514 → **532 passed / 0 failed**）：
+
+- FR-030：`run_task_once` 真实执行（`coordinator/run_once.py` + 双适配器 + ScanRun 记录；`test_host_swap.py` 固化断言已修正）
+- FR-031：通知 SQLite 持久化 + `notification_sink` 投递 + 扫描器 `notifier` 接线 + FR-164 事件类型补全
+- FR-032：`ApprovalInbox` SQLite 后端 + `decide_approval`（APPROVED/REJECTED）+ `agent_cli --approve` 入口
+- FR-033：DSH Bridge 可移植配置（Plugin Config → UA_* env → Auto Discovery → Explicit Failure）
+- RULE-003：RepositorySet 全量接线 + IdempotencyStore/NotificationDedup/KillSwitch SQLite 后端（跨重启测试）
+
+**剩余 P0（1 项，属 CHAPTER 4）**：多源 DoD（FR-074 第二/三 Flight 源 + FR-082 Hotel Live 源）。
+**CH2 剩余**：2.5 安装/reload/healthcheck、2.6 重启恢复 Acceptance Flow（§36）。

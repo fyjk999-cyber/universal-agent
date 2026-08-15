@@ -1,6 +1,8 @@
 """Notification dedup (§34 + P0.8 持久化) — fingerprint + cooldown + restart-safe.
 
-重启后仍然记得已提醒：cooldown 状态持久化到 JSON。
+重启后仍然记得已提醒：cooldown 状态持久化。
+P23（RULE-003）：支持 SQLite 后端（repo 参数，SqliteKvRepository table=notification_dedup）；
+未提供时保留 JSON 文件兼容。
 字段：fingerprint / task_id / candidate_id / trigger_reason / material_state /
       last_sent_at / cooldown_until（P11 完整化）。
 """
@@ -15,37 +17,46 @@ from typing import Any, Dict, Optional
 
 log = logging.getLogger("ua.notifications.dedup")
 
+_STATE_KEY = "state"
+
 
 class NotificationDedup:
     """Suppresses repeat notifications for the same material state (§34)."""
 
     def __init__(self, cooldown_minutes: int = 720,
-                 state_path: Optional[Path] = None) -> None:
+                 state_path: Optional[Path] = None,
+                 repo=None) -> None:
         self.cooldown = timedelta(minutes=cooldown_minutes)
         self.state_path = state_path
+        self.repo = repo  # SqliteKvRepository(table="notification_dedup")；RULE-003
         self._last: Dict[str, datetime] = {}
-        if state_path is not None:
-            self._load()
+        self._load()
 
     def _load(self) -> None:
-        if self.state_path is not None and self.state_path.exists():
+        raw: Optional[Dict[str, Any]] = None
+        if self.repo is not None:
+            raw = self.repo.get(_STATE_KEY)
+        elif self.state_path is not None and self.state_path.exists():
             try:
                 raw = json.loads(self.state_path.read_text("utf-8"))
-                for fp, iso in raw.items():
-                    try:
-                        self._last[fp] = datetime.fromisoformat(iso)
-                    except ValueError:
-                        continue
             except Exception:  # noqa: BLE001
                 log.warning("dedup state corrupt; starting empty")
+        if raw:
+            for fp, iso in (raw.get("last") or {}).items():
+                try:
+                    self._last[fp] = datetime.fromisoformat(iso)
+                except ValueError:
+                    continue
 
     def _persist(self) -> None:
+        payload = {"last": {fp: ts.isoformat() for fp, ts in self._last.items()}}
+        if self.repo is not None:
+            self.repo.put(_STATE_KEY, payload)
+            return
         if self.state_path is None:
             return
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(
-            json.dumps({fp: ts.isoformat() for fp, ts in self._last.items()}),
-            "utf-8")
+        self.state_path.write_text(json.dumps(payload), "utf-8")
 
     @staticmethod
     def fingerprint(task_id: str, target_key: str,

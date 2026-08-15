@@ -1,7 +1,8 @@
 """Kill Switch（§66）— 全局急停。
 
 一旦触发，所有真实执行动作立即拒绝，直到人工显式解除。
-设计为进程内单例 + 文件持久化（重启后仍保持 killed 状态）。
+设计为进程内单例 + 持久化（重启后仍保持 killed 状态）。
+P23（RULE-003）：支持 SQLite 后端（repo 参数）；未提供时保留 JSON 兼容。
 """
 from __future__ import annotations
 
@@ -13,30 +14,43 @@ from typing import Optional
 
 log = logging.getLogger("ua.actions.killswitch")
 
+#: 持久化键
+_STATE_KEY = "state"
+
 
 class KillSwitch:
-    def __init__(self, state_path: Optional[Path] = None) -> None:
+    def __init__(self, state_path: Optional[Path] = None, repo=None) -> None:
         self.state_path = state_path
+        self.repo = repo  # SqliteKvRepository(table="killswitch")；RULE-003
         self._killed = False
         self._reason = ""
         self._killed_at: Optional[str] = None
-        if state_path is not None and state_path.exists():
+        self._load()
+
+    def _load(self) -> None:
+        data: Optional[dict] = None
+        if self.repo is not None:
+            data = self.repo.get(_STATE_KEY)
+        elif self.state_path is not None and self.state_path.exists():
             try:
-                data = json.loads(state_path.read_text("utf-8"))
-                self._killed = data.get("killed", False)
-                self._reason = data.get("reason", "")
-                self._killed_at = data.get("killed_at")
+                data = json.loads(self.state_path.read_text("utf-8"))
             except Exception:  # noqa: BLE001
-                pass
+                data = None
+        if data:
+            self._killed = data.get("killed", False)
+            self._reason = data.get("reason", "")
+            self._killed_at = data.get("killed_at")
 
     def _persist(self) -> None:
+        payload = {"killed": self._killed, "reason": self._reason,
+                   "killed_at": self._killed_at}
+        if self.repo is not None:
+            self.repo.put(_STATE_KEY, payload)
+            return
         if self.state_path is None:
             return
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(json.dumps({
-            "killed": self._killed, "reason": self._reason,
-            "killed_at": self._killed_at,
-        }), "utf-8")
+        self.state_path.write_text(json.dumps(payload), "utf-8")
 
     def kill(self, reason: str) -> None:
         """触发急停（人工/审计事件调用）。"""

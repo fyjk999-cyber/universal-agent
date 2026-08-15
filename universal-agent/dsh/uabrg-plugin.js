@@ -10,6 +10,57 @@
 //
 // 架构（RULE 1/2）：Universal Agent Core 零修改；DSH 仅通过 shell 调用
 // 其 CLI，符合 HostProtocol 反向桥接原则。
+//
+// FR-033（可移植配置）：路径解析优先级 =
+//   Plugin Config（apply(ctx) 的 ctx.config.uaRoot/uaPython）
+//   → Environment（UA_ROOT / UA_PYTHON / UA_DATA_DIR / UA_CONFIG）
+//   → Auto Discovery（相对 __dirname / 当前工作目录的仓库标记）
+//   → Explicit Failure（找不到时抛错，绝不静默回退到开发者机器路径）
+
+let fs = null
+let path = null
+try {
+  fs = require('fs')
+  path = require('path')
+} catch (e) { /* Cordis 沙箱可能无 require：仅靠配置/环境变量解析 */ }
+
+function discoverRoot() {
+  // Auto Discovery：插件位于 <repo>/dsh/uabrg-plugin.js → 尝试 __dirname 上级
+  if (!fs || !path) {
+    return process.env.UA_ROOT || null  // 无文件系统能力时仅接受显式配置
+  }
+  const dir = (typeof __dirname === 'string') ? path.resolve(__dirname, '..') : process.cwd()
+  for (const cand of [dir, process.cwd()]) {
+    try {
+      if (fs.existsSync(path.join(cand, 'pyproject.toml')) &&
+          fs.existsSync(path.join(cand, 'universal_agent'))) {
+        return cand
+      }
+    } catch (e) { /* ignore */ }
+  }
+  return null
+}
+
+function resolvePaths(ctx) {
+  // 1) Plugin Config（最高优先）
+  const cfg = (ctx && ctx.config) || {}
+  // 2) Environment
+  const envRoot = process.env.UA_ROOT || ''
+  const envPy = process.env.UA_PYTHON || ''
+  // 3) Auto Discovery
+  const root = cfg.uaRoot || envRoot || discoverRoot()
+  const py = cfg.uaPython || envPy ||
+    (root && fs ? path.join(root, '..', '.venv', 'bin', 'python') : '')
+  const pyOk = !py || (fs ? fs.existsSync(py) : true)  // 无 fs 时信任显式 UA_PYTHON
+  if (!root || !py || !pyOk) {
+    const msg =
+      'UA_BRIDGE: 无法定位 Universal Agent 运行环境。请配置 UA_ROOT / UA_PYTHON ' +
+      '(环境变量或插件配置 uaRoot / uaPython)。拒绝回退到开发者机器路径。' +
+      ' (root=' + root + ', py=' + py + ')'
+    throw new Error(msg)
+  }
+  return { root: root, py: py }
+}
 
 return {
   inject: ['shell', 'timer'],
@@ -17,8 +68,13 @@ return {
     const shell = ctx.get('shell')
     if (shell === undefined) return
     const timer = ctx.get('timer')
-    const UA_ROOT = '/Users/huhongjie/Desktop/扫描决策类agent/universal-agent'
-    const PY = '/Users/huhongjie/Desktop/扫描决策类agent/.venv/bin/python'
+    // FR-033：可移植路径解析（无硬编码）
+    const UA = resolvePaths(ctx)
+    const UA_ROOT = UA.root
+    const PY = UA.py
+    // UA_DATA_DIR / UA_CONFIG：传递给被调 CLI 进程（供下游使用）
+    const UA_DATA_DIR = process.env.UA_DATA_DIR || (ctx.config && ctx.config.uaDataDir) || ''
+    const UA_CONFIG = process.env.UA_CONFIG || (ctx.config && ctx.config.uaConfig) || ''
 
     function toStr(v) {
       if (v === null || v === undefined) return ''

@@ -34,8 +34,8 @@
 | Chapter | 名称 | 完成度 | 依据 |
 |---|---|---|---|
 | CHAPTER 0 | Repository Reality Lock | **COMPLETE** | `scanner/ tasks/` 已归档至 `legacy/`；SPAC.md 建立；README/ROADMAP/KNOWN_LIMITATIONS/FINAL_VERIFICATION 与代码对齐（本文件重写即完成 0.3）；MISSING_FEATURE_REPORT 由架构审计跟踪 |
-| CHAPTER 1 | Runtime Composition | **PARTIAL** | SQLite schema 全表存在（`persistence/sqlite.py`），但 `service.py:37-42` RepositorySet 仅接 tasks/scan_runs/memory；**events/outbox/observations/notifications/approvals/actions/audit/source_health 的 9 个 SQLite repo 定义但零装配（仅测试实例化）**；运行期 approvals/idempotency/dedup/observations 仍为 JSON（RULE-003 违规，P0）；OutboxDispatcher 未接线（2026-08-15 深度审计修正，原"COMPLETE"过高） |
-| CHAPTER 2 | DeepSeek Harness Production Integration | **PARTIAL** | 2.2 事件/2.3 审批/2.6 重启恢复有实现；但 **FR-030 `run_task_once()` 仍 `not_implemented`、FR-031 通知仅写日志、FR-032 审批固定返回 pending、FR-033 DSH Bridge 硬编码 `/Users/...`**（代码证据见 FINAL_VERIFICATION_REPORT「已披露缺口」表，P1 级，2026-08-15 审计确认） |
+| CHAPTER 1 | Runtime Composition | **PARTIAL**（RULE-003 已闭环） | P23：RepositorySet 全量接线（tasks/scan_runs/memory/events/outbox/observations/notifications/approvals/actions/audit/source_health + idempotency/dedup/killswitch Kv 表），IdempotencyStore/NotificationDedup/KillSwitch 均支持 SQLite 后端（跨重启测试）；**剩余**：事件组件尚未消费 outbox/events repo、OutboxDispatcher 未接 daemon 后台循环、observations repo 未替换扫描器内 JSON ObservationStore |
+| CHAPTER 2 | DeepSeek Harness Production Integration | **PARTIAL**（2.1-2.4 ✅） | P23：**FR-030 run_task_once 真实执行**（`coordinator/run_once.py` + 双适配器）、**FR-031 通知持久化+sink 投递**、**FR-032 审批真实流转（decide_approval + CLI）**、**FR-033 Bridge 可移植配置**均已完成并测试（532 tests）；**剩余**：2.5 安装/reload/healthcheck 验收、2.6 重启恢复 Acceptance Flow（§36） |
 | CHAPTER 3 | Generic Source Runtime | **PARTIAL** | 3.5 CapabilityResolver ✅（P5）、3.6 Source Health ✅（P6）、3.7 Failure Isolation ✅（TEST I）；**3.1 HTTP / 3.2 API / 3.3 Browser / 3.4 Mobile 均为空占位**（`adapters/{http,api,browser,mobile}/` 仅 `__init__.py`） |
 | CHAPTER 4 | Travel Multi-Source | **PARTIAL** | 4.1 Skyscanner hardening ✅（P8，唯一 Flight Live 源）；**4.2/4.3 第二/第三 Flight Source（Ctrip/Fliggy/Tongcheng）未接（FR-074）、4.4 Hotel Live Source 未接（仅 replay）、4.5 单源下无法做 cross-source entity resolution、4.7 Live Bundle 依赖单 Flight 源 + replay Hotel** |
 | CHAPTER 5 | Persistent Opportunity Watch | **COMPLETE** | 5.1 Historical Baseline/percentile ✅（`opportunity/engine.py` 基于 quotes 历史）、5.2 Price History ✅、5.3 Trend estimate ✅（P11，is_estimate=true）、5.4 Opportunity Score ✅、5.5 ConditionWatch ✅、5.6 Notification Cooldown ✅（dedup 持久化）、5.7 Deadline-sensitive 频率 ✅（P7 RuleAdaptiveScheduler 时间窗口） |
@@ -55,9 +55,9 @@
 
 | # | 工作项 | 对应 FR | 优先级 | 目标 |
 |---|---|---|---|---|
-| 1 | **CHAPTER 2 补齐（Harness 生产集成）**：真实 `run_task_once()`（含修正 test_host_swap 固化断言）；通知真实送达（非仅日志）；审批流程真实流转（非固定 pending） | FR-030 / FR-031 / FR-032 | **P0** | CHAPTER 2 Gate PASS（SPAC §36） |
-| 2 | **DSH Bridge 可移植配置**：移除 `/Users/...` 硬编码，接 `UA_ROOT / UA_PYTHON / UA_DATA_DIR / UA_CONFIG`，禁止 silent fallback | FR-033 | **P0** | 换机器零改代码 |
-| 3 | **RULE-003 运行时接线（CH1 补齐）**：approvals/idempotency/dedup/observations/ks 全部切换到 SQLite RepositorySet（9 个 repo 装配进 `service.py`），JSON 仅保留 Export/Debug/Log | RULE-003 / CH1-1.1 | **P0** | 无第二可写真相 |
+| 1 | **CHAPTER 2 补齐（Harness 生产集成）**：真实 `run_task_once()`（含修正 test_host_swap 固化断言）；通知真实送达（非仅日志）；审批流程真实流转（非固定 pending） | FR-030 / FR-031 / FR-032 | **P0** | ✅ **P23 已修复**（532 tests）；剩余 2.5/2.6 验收 |
+| 2 | **DSH Bridge 可移植配置**：移除 `/Users/...` 硬编码，接 `UA_ROOT / UA_PYTHON / UA_DATA_DIR / UA_CONFIG`，禁止 silent fallback | FR-033 | **P0** | ✅ **P23 已修复**（零硬编码，显式失败） |
+| 3 | **RULE-003 运行时接线（CH1 补齐）**：approvals/idempotency/dedup/observations/ks 全部切换到 SQLite RepositorySet（9 个 repo 装配进 `service.py`），JSON 仅保留 Export/Debug/Log | RULE-003 / CH1-1.1 | **P0** | ✅ **P23 已修复**（RepositorySet 全量接线 + 3 Kv 表 + 跨重启测试）；剩余：组件消费 outbox/events、observations 扫描器替换 |
 | 4 | **多源 DoD 起步**：第二 Flight Live Source（Ctrip/Fliggy）+ Hotel Live Source | FR-074 / FR-082 | **P0**（DoD 多源） | Flight+Hotel 真实多源 |
 | 5 | **生产凭据后端（macOS 优先）**：CredentialVault 接 OS Keychain（Security Framework），dev 混淆降级为兜底 | FR-191 | **P0**（安全） | 明文/混淆 key 不落盘 |
 | 6 | **通用 Adapter 层落地**：HTTP Adapter + API Adapter + Browser Adapter（含深度、失败隔离） | FR-060 / FR-061 / FR-062 | P1 | CH 3.1/3.2/3.3 Gate |

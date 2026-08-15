@@ -83,7 +83,13 @@ class TestJarvisHostSwap:
         j = MockJarvisHostAdapter(coordinator=coord2)
         tasks = j.list_tasks()
         assert len(tasks) == 1
-        assert j.run_task_once(tasks[0].id)["status"] == "not_implemented"
+        # FR-030（P23）：无 runner 时显式失败（不再 not_implemented）
+        from universal_agent.coordinator.task_coordinator import TaskCommandError
+        try:
+            j.run_task_once(tasks[0].id)
+            raise AssertionError("run_task_once 无 runner 应显式失败")
+        except TaskCommandError:
+            pass
         assert j.get_host_user_context()["host"] == "jarvis"
 
 

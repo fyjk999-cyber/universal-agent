@@ -168,8 +168,32 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Universal Agent 综合 CLI")
     parser.add_argument("--domain", default="flight",
                         help="flight|hotel|jobs|bundle|prepare|execute")
+    parser.add_argument("--approve", metavar="APPROVAL_ID",
+                        help="FR-032：审批决策入口（配合 --decision）")
+    parser.add_argument("--decision", choices=["yes", "no"], default="yes",
+                        help="approve 决策：yes=APPROVED / no=REJECTED")
     args = parser.parse_args()
+    if args.approve:
+        _approve_cli(args.approve, args.decision == "yes")
+        return
     asyncio.run(_run(args.domain))
+
+
+def _approve_cli(approval_id: str, approved: bool) -> None:
+    """FR-032：真实审批决策入口（服务装配 → adapter.decide_approval）。"""
+    from pathlib import Path
+    from universal_agent.service import UniversalAgentService
+    svc = UniversalAgentService(Path("/tmp/ua-svc"))
+    try:
+        out = svc.adapter.decide_approval(approval_id, approved)
+    except Exception as exc:  # noqa: BLE001 — CLI 友好输出
+        print(f"审批失败: {exc}")
+        sys.exit(1)
+    finally:
+        svc.close()
+    print(f"== 审批结果 ==")
+    print(f"  approval_id={out['approval_id']}  status={out['status']}  "
+          f"approved={out['approved']}")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@
 | Capability | Status | Implementation | Tests | Known Limitations | Next Action |
 |---|---|---|---|---|---|
 | HostProtocol | IMPLEMENTED | `hosts/protocol/host.py`（12 方法） | host_contract | — | — |
-| HarnessHostAdapter（RULE-004 命令边界） | IMPLEMENTED | `hosts/deepseek_harness/adapter.py`：create/update/pause/resume/cancel/list/get 经 TaskCoordinator；**run_task_once 例外** | host_swap | run_task_once=not_implemented；通知仅日志；审批固定 pending（FR-030~032，P1） | CH 2 |
+| HarnessHostAdapter（RULE-004 命令边界 + FR-030~032） | IMPLEMENTED | `hosts/deepseek_harness/adapter.py`：create/update/pause/resume/cancel/list/get 经 TaskCoordinator；**run_task_once 真实执行（P23）**；send_notification 持久化+sink；request_approval 真实创建 + decide_approval | host_swap + test_p23_run_once | — | 2.5/2.6 验收 |
 | JarvisHostAdapter | IMPLEMENTED | `hosts/jarvis/adapter.py` + event_bridge + mock；10 capabilities（FR-041） | test_p20_jarvis（Host Swap Core 零修改） | Mock/Preview 契约已稳定 | 生产部署 |
 | EventEnvelope（FR-020） | IMPLEMENTED | `events/envelope.py`（event_id/type/timestamp/trace_id/task_id/run_id/source/payload） | events 5+ | 事件类型枚举待补 FR-164 列表 | CH 5 |
 | EventBus / InProcess | IMPLEMENTED | `events/bus.py` | events | 进程内 | — |
@@ -35,8 +35,8 @@
 | Capability | Status | Implementation | Tests | Known Limitations | Next Action |
 |---|---|---|---|---|---|
 | Repository Protocol + SQLite | IMPLEMENTED | `persistence/protocol.py` + `sqlite.py` + `repos.py`（9 个 repo 类 + 全表 schema） | test_no_json_dual_state（P1.1） | — | — |
-| RepositorySet 装配（§8） | **PARTIAL** | `service.py:37-42` 仅接 tasks/scan_runs/memory；events/outbox/observations/notifications/approvals/actions/audit/source_health 的 SQLite repo **零装配（仅测试实例化）** | P1.1/P2 集成 | **RULE-003 违规（P0）**：approvals.json/idempotency.json/ks.json/dedup JSON/observations.json 运行时仍可写 | **P0：全部并入 RepositorySet** |
-| JSON 仅限 Export/Debug/Log | **FAIL** | approval/inbox.py:24、idempotency/store.py:36、killswitch.py:18、dedup.py:42-48、observations/store.py 运行时写 JSON | — | 第二可写真相（P0） | P0 接线 |
+| RepositorySet 装配（§8，P23 全量接线） | IMPLEMENTED | `service.py` RepositorySet：tasks/scan_runs/memory/events/outbox/observations/notifications/approvals/actions/audit/source_health + idempotency/dedup/killswitch Kv 表 | test_service_wires_all_repos_sqlite | 组件消费 outbox/events 待接（P2） | CH1 剩余 |
+| JSON 仅限 Export/Debug/Log | IMPLEMENTED（P23） | IdempotencyStore/NotificationDedup/KillSwitch/ApprovalInbox 均支持 SQLite 后端（service 装配 SQLite）；JSON 仅显式 data_dir 时保留（兼容/测试） | test_*_survives_restart ×3 | observations 扫描器内仍用 JSON ObservationStore（P2 替换） | CH1 剩余 |
 
 ## 四、Data Contracts
 
@@ -112,9 +112,9 @@
 
 | Capability | Status | Implementation | Tests | Known Limitations | Next Action |
 |---|---|---|---|---|---|
-| NotificationDedup（FR-160/161 持久化） | IMPLEMENTED | `notifications/dedup.py` fingerprint + cooldown，重启不重发 | test_dedup | — | — |
+| NotificationDedup（FR-160/161 持久化） | IMPLEMENTED | `notifications/dedup.py` fingerprint + cooldown；P23 支持 SQLite 后端（service 装配） | test_dedup + test_dedup_sqlite_survives_restart | — | — |
 | Notification priority/channel（FR-162/163） | **PARTIAL** | 无 LOW/NORMAL/HIGH/URGENT 分级、无 channel 抽象 | — | P2 | CH 5 |
-| 通知事件类型（FR-164） | **PARTIAL** | `events/types.py` 仅 OPPORTUNITY_DETECTED 等 | — | PRICE_DROP/RARE_OPPORTUNITY 等未枚举（P2） | CH 5 |
+| 通知事件类型（FR-164） | IMPLEMENTED（P23） | `events/types.py` 补 PRICE_DROP/RARE_OPPORTUNITY/AVAILABILITY_CHANGE/WATCH_FAILED/APPROVAL_REQUIRED/ACTION_RESULT | test_fr164_event_types_declared | 事件实际投递链路待 2.6 验收 | CH 2.6 |
 | Audit Log（RULE-010） | IMPLEMENTED | `observability/audit.py` | 1+ | — | — |
 | Metrics（§31） | IMPLEMENTED | `observability/registry.py` MetricsRegistry | test_p4_observability | 未全链路自动埋点（P3） | v1.3 |
 | Traces | IMPLEMENTED | `observability/tracer.py` trace_id 链路 | test_p4_observability | 无父子 span 关联（P3） | v1.3 |
@@ -127,17 +127,17 @@
 | shadow_scan CLI | IMPLEMENTED | `apps/shadow_scan.py`（replay + --live） | 实测：5 raw→4 candidates→Top5→机会 75.4→通知 | — | — |
 | agent_cli 多域 | IMPLEMENTED | `apps/agent_cli.py`（flight/hotel/jobs/bundle/prepare/execute） | 冒烟 rc=0 | — | — |
 | scheduler CLI | IMPLEMENTED | `apps/scheduler.py`（SQLite + RunLease） | 集成测试 | — | — |
-| DSH Bridge（FR-033） | **PARTIAL** | `dsh/uabrg-plugin.js` ua_watch_scan 工具 + scheduler 事件 | 实测 | **硬编码 /Users/... 路径（P0）** | CH 2.4 |
-| Harness 通知/审批（FR-031/032） | **PARTIAL** | adapter 侧仅日志/固定 pending | — | **P0**（通知不送达/审批不可决） | CH 2.2/2.3 |
+| DSH Bridge（FR-033） | IMPLEMENTED（P23） | `dsh/uabrg-plugin.js`：Plugin Config → UA_* 环境变量 → Auto Discovery → Explicit Failure，零硬编码 | grep 验证无 /Users/ | 需 node 环境做运行验证（本机无 node） | 2.5 验收 |
+| Harness 通知/审批（FR-031/032） | IMPLEMENTED（P23） | 通知 SQLite 持久化 + sink 投递；审批真实创建 + decide_approval + agent_cli --approve | test_p23（10 项） | DSH 插件侧通知展示待 2.6 验收 | 2.6 |
 | CI Gates | IMPLEMENTED | `.github/workflows/ci.yml`（3.11+3.12，ruff+mypy+coverage） | P21/22 | — | — |
 | 依赖可复现 | IMPLEMENTED | pyproject 依赖组（dev/browser/flight-live/hotel-live/jobs-live） | P22 | — | — |
 
 ---
 
-## 总结（2026-08-15，深度审计修正版）
+## 总结（2026-08-15，P23 P0 收敛后）
 
-- **IMPLEMENTED**: 约 44 项（含 SQLite schema + tasks/scan_runs/memory 装配、Memory 8 子域、Skyscanner Live、Controlled Actions 机制、Jarvis Host Swap、CI）
-- **PARTIAL**: 约 12 项 — Harness 生产集成（FR-030~033）、RepositorySet 装配（RULE-003）、Reliable Events 接线、多源、新域 Live、Notification 分级、生产凭据后端、Decision 层
+- **IMPLEMENTED**: 约 50 项（P23 新增：run_task_once 真实执行、通知持久化+sink、审批真实流转、Bridge 可移植配置、RepositorySet 全量接线、3 个 SQLite Kv 后端）
+- **PARTIAL**: 约 10 项 — 多源 DoD、Reliable Events 组件消费、通用 Adapter、新域 Live、Notification 分级、生产凭据后端、Decision 层、Jobs Live、Skyscanner 详情页
 - **EMPTY**: 8 项 — adapters/{http,api,browser,mobile}、security/{identity_vault,session_broker}、core/decision/、core/constraints/
 - **BROKEN**: 0 项
-- 关键结论（修正）：**P0×6 + P1×15** 已全部在 `MISSING_FEATURE_REPORT.md`（§3 逐条文件:行号证据）披露并映射到 ROADMAP v1.1 修复路线；**PROJECT_STATUS = DEVELOPMENT**（未达 SPAC §53 DoD：Notify/Approve 未真实送达、多源未达标、RULE-003 未闭环）
+- 关键结论：**P0×6 中 5 项已修复（FR-030~033 + RULE-003）**，剩余 P0 为多源 DoD（CH4）；P1×15 中若干已随修复部分消解；完整状态以 `MISSING_FEATURE_REPORT.md` 为准（**532 tests / 0 failed**）

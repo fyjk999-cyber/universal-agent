@@ -90,6 +90,7 @@ class ShadowScanCoordinator:
                  observations: Optional[ObservationStore] = None,
                  dedup: Optional[NotificationDedup] = None,
                  fetchers: Optional[Dict[str, RawListingFetcher]] = None,
+                 notifier: Optional[Callable[[Dict], None]] = None,
                  max_queries: int = 60) -> None:
         self.bus = bus
         self.registry = registry
@@ -97,6 +98,7 @@ class ShadowScanCoordinator:
         self.observations = observations
         self.dedup = dedup or NotificationDedup()
         self.fetchers = fetchers or {}
+        self.notifier = notifier  # FR-031：机会通知真实投递（host send_notification）
         self.max_queries = max_queries
 
     # ------------------------------------------------------------------ API
@@ -303,6 +305,16 @@ class ShadowScanCoordinator:
         await self._emit(EventType.NOTIFICATION_SENT, outcome,
                          payload={"listing_id": top.listing_id,
                                   "price": top.price_cny})
+        # FR-031：真实投递（host send_notification → 持久化 + sink）
+        if self.notifier is not None:
+            self.notifier({
+                "event_type": EventType.OPPORTUNITY_DETECTED.value,
+                "task_id": task.id,
+                "title": f"机会发现: {top.origin_airport}→{top.dest_airport} ¥{top.price_cny:.0f}",
+                "material": {"origin": top.origin_airport, "dest": top.dest_airport,
+                             "price": top.price_cny, "depart": top.depart_date,
+                             "reasons": reasons},
+            })
         return True
 
     # ------------------------------------------------------------------ util

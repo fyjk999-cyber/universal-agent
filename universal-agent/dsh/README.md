@@ -44,6 +44,23 @@ Universal Agent (独立产品，零修改)
 
 或：通过 `harness.handle` 事件/宿主预设挂载（进阶）。
 
+## 可移植配置（FR-033，2026-08-15 起无硬编码路径）
+
+插件路径解析优先级（拒绝静默回退到开发者机器路径）：
+
+1. **Plugin Config**：`cordis_run` 时传 `{ uaRoot, uaPython, uaDataDir, uaConfig }`
+2. **Environment**：`UA_ROOT` / `UA_PYTHON` / `UA_DATA_DIR` / `UA_CONFIG`
+3. **Auto Discovery**：相对插件位置 `<repo>/dsh/uabrg-plugin.js` 向上找仓库标记
+   （`pyproject.toml` + `universal_agent/`），venv 取 `<repo>/.venv/bin/python`
+4. **Explicit Failure**：找不到时抛错，绝不静默使用开发者路径
+
+示例（环境变量方式）：
+
+```bash
+export UA_ROOT=/path/to/universal-agent
+export UA_PYTHON=/path/to/venv/bin/python
+```
+
 ## 定时调度用法
 
 - 开始：触发 `ua/scheduler/start` 事件，payload `{ domain, intervalSec }`（间隔 ≥60s）

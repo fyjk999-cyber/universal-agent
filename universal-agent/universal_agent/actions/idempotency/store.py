@@ -5,6 +5,9 @@
 - finalize: 完成后定稿
 - 若 commit 后崩溃但 finalize 前崩溃 → 状态 UNKNOWN/RESERVED
   → reconcile() 查询平台真实状态再决定（防双订单）
+
+P23（RULE-003）：支持 SQLite 后端（repo 参数，SqliteKvRepository table=idempotency）；
+未提供时保留 JSON 文件兼容。
 """
 from __future__ import annotations
 
@@ -30,23 +33,34 @@ class DuplicateRequest(RuntimeError):
 
 
 class IdempotencyStore:
-    def __init__(self, data_dir: Path) -> None:
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self._file = self.data_dir / "idempotency.json"
+    def __init__(self, data_dir: Optional[Path] = None, repo=None) -> None:
+        self.repo = repo  # SqliteKvRepository(table="idempotency")；RULE-003
+        self.data_dir = Path(data_dir) if data_dir is not None else None
+        if self.data_dir is not None:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+        self._file = (self.data_dir / "idempotency.json") if self.data_dir is not None else None
         self._records: Dict[str, Dict[str, Any]] = {}
         self._load()
 
     def _load(self) -> None:
-        if self._file.exists():
+        if self.repo is not None:
+            for rec in self.repo.list_all():
+                self._records[rec["key"]] = rec
+            return
+        if self._file is not None and self._file.exists():
             try:
                 self._records = json.loads(self._file.read_text("utf-8"))
             except Exception:  # noqa: BLE001
                 log.warning("idempotency.json corrupt; starting empty")
 
     def _save(self) -> None:
-        self._file.write_text(json.dumps(self._records, ensure_ascii=False, indent=2),
-                              "utf-8")
+        if self.repo is not None:
+            for rec in self._records.values():
+                self.repo.put(rec["key"], rec)
+            return
+        if self._file is not None:
+            self._file.write_text(json.dumps(self._records, ensure_ascii=False, indent=2),
+                                  "utf-8")
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         return self._records.get(key)

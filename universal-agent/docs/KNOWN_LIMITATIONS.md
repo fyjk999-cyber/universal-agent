@@ -48,6 +48,16 @@
 | 35 | NotificationDedup 内存态，重启遗忘 | dedup fingerprint + cooldown 持久化（P0.8）+ notifications 表（P1） |
 | 36 | `due_tasks(string)` 生产路径残留 | 删除，生产路径全用 `due_tasks_utc`（A.1） |
 
+### ✅ P23（2026-08-15）新增修复（P0 收敛 Sprint）
+
+| # | 旧问题（审计 P0） | 修复 |
+|---|---|---|
+| 37 | FR-030 `run_task_once()` not_implemented 桩（测试固化） | `coordinator/run_once.py` + Harness/Jarvis 双适配器真实执行 + ScanRun 记录；test_host_swap 断言已修正 |
+| 38 | FR-031 Harness 通知仅写日志 | SQLite 通知持久化 + `notification_sink` 投递 + 扫描器 `notifier` 接线 + FR-164 事件类型补全 |
+| 39 | FR-032 审批固定返回 pending | ApprovalInbox SQLite 后端 + `decide_approval`（APPROVED/REJECTED）+ `agent_cli --approve` 入口 |
+| 40 | FR-033 DSH Bridge 硬编码 `/Users/...` | Plugin Config → Env（UA_ROOT/UA_PYTHON/UA_DATA_DIR/UA_CONFIG）→ Auto Discovery → Explicit Failure |
+| 41 | RULE-003 JSON 双写（approvals/idempotency/dedup/ks/observations） | RepositorySet 全量接线（11 repo + 3 Kv 表）；IdempotencyStore/NotificationDedup/KillSwitch SQLite 后端（跨重启测试）；observations 扫描器替换列入剩余 |
+
 ## ⚠️ 当前已知限制（未解决，v1.0 后仍存在）
 
 > 按 Severity 分级；P0 = 必修（SPAC 硬性点/架构违规），P1 = 高，P2 = 中，P3 = 低。
@@ -56,16 +66,15 @@
 > （TEST A-J / 28 项 Final Acceptance Criteria）**未覆盖这些点**——即"无未披露 P0/P1"的
 > 早期结论已失效，以下 P0/P1 为审计后如实披露。
 
-### P0（必修，6 项，详见 MISSING_FEATURE_REPORT §3.1）
+### P0（剩余 1 项；其余 5 项已于 P23 修复，见"已解决"表）
+
+> ✅ **P23（2026-08-15）已修复**：FR-030（run_task_once 真实执行）、FR-031（通知持久化+sink）、
+> FR-032（审批真实流转+decide 入口）、FR-033（Bridge 可移植配置）、RULE-003（RepositorySet 全量接线
+> + idempotency/dedup/killswitch SQLite 后端）。测试基线 514 → **532 passed / 0 failed**。
 
 | 限制 | 对应 FR/RULE | 代码证据 |
 |---|---|---|
-| **`run_task_once()` 仍为 not_implemented 桩**（Harness+Jarvis 双适配器），且测试将桩固化为断言 | FR-030 | `hosts/deepseek_harness/adapter.py:56-57`、`hosts/jarvis/adapter.py:57-58`、`tests/migration/test_host_swap.py:86` |
-| **Harness 通知从不真实送达**：send_notification 仅 log；事件止于进程内 bus（handlers 空）；SQLite notifications 表零装配；DSH 插件是纯 shell 桥不读通知 | FR-031 | `adapter.py:70-71`、`events/handlers/__init__.py`（0 字节）、`persistence/repos.py:162-172` 零装配、`dsh/uabrg-plugin.js` |
-| **审批无法被真实用户决策**：host request_approval 固定返回 pending；ApprovalInbox.decide() 生产零调用，无 UI/API/CLI 入口 | FR-032 | `adapter.py:73-75`、`actions/approval/inbox.py:60-72`（仅测试调用） |
-| **DSH Bridge 硬编码 `/Users/huhongjie/...` 双路径**，零 UA_* 环境变量/自动发现/显式失败 | FR-033 | `dsh/uabrg-plugin.js:20-21` |
-| **RULE-003 运行时违规**：approvals.json / idempotency.json / ks.json / 通知 dedup JSON / observations.json 仍是第二可写真相；9 个 SQLite repo 定义但零装配（RepositorySet 仅接 tasks/scan_runs/memory） | RULE-003 / CH1-1.1 | `actions/approval/inbox.py:24`、`actions/idempotency/store.py:36`、`actions/policy/killswitch.py:18`、`notifications/dedup.py:42-48`、`service.py:37-42` |
-| **无真实多 Source Pipeline**：Hotel 无任何 Live 源（booking 仅 fixture）；Flight 仅 Skyscanner 一个 Live 源 | FR-082 / FR-074（DoD 多源） | `adapters/replay/`、`adapters/skyscanner/` |
+| **无真实多 Source Pipeline**：Hotel 无任何 Live 源（booking 仅 fixture）；Flight 仅 Skyscanner 一个 Live 源（属 CHAPTER 4） | FR-082 / FR-074（DoD 多源） | `adapters/replay/`、`adapters/skyscanner/` |
 
 ### P1（高优先级，已披露）
 

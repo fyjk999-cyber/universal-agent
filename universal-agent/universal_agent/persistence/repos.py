@@ -269,3 +269,33 @@ class SqliteSourceHealthRepository(SourceHealthRepository):
     def list(self) -> List[Dict[str, Any]]:
         rows = self.db.query_all("SELECT data FROM source_health")
         return [json.loads(r["data"]) for r in rows]
+
+
+class SqliteKvRepository:
+    """P23（RULE-003）：通用 key-value SQLite 仓库。
+
+    用于 idempotency / notification_dedup / killswitch 状态（表名取自有界集合）。
+    API：get(key) / put(key, value) / list_all()。
+    """
+
+    _TABLES = ("idempotency", "notification_dedup", "killswitch")
+
+    def __init__(self, db: Database, table: str) -> None:
+        if table not in self._TABLES:
+            raise ValueError(f"unsupported kv table: {table}")
+        self.db = db
+        self.table = table
+
+    def get(self, key: str) -> Optional[Dict[str, Any]]:
+        row = self.db.query_one(
+            f"SELECT data FROM {self.table} WHERE key=?", (key,))
+        return json.loads(row["data"]) if row else None
+
+    def put(self, key: str, value: Dict[str, Any]) -> None:
+        self.db.execute(
+            f"INSERT OR REPLACE INTO {self.table} (key, data) VALUES (?,?)",
+            (key, json.dumps(value, ensure_ascii=False)))
+
+    def list_all(self) -> List[Dict[str, Any]]:
+        rows = self.db.query_all(f"SELECT data FROM {self.table}")
+        return [json.loads(r["data"]) for r in rows]
