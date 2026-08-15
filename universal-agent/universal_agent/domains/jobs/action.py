@@ -64,3 +64,26 @@ def store_application_draft(memory: MemoryStore, task_id: str,
     """保存申请草稿（简历/动机信），TASK scope。"""
     return memory.put(Scope.TASK, key="application_draft", value=fields,
                       task_id=task_id, kind="preference", source="job_prep")
+
+
+#: HUMAN-ONLY 边界（P13）：这些内容禁止 AI 代答
+_HUMAN_ONLY_MARKERS = (
+    # personality 测试
+    "性格", "人格", "personality", "mbti", "价值观测试",
+    # truth 声明
+    "确认.*真实", "truth", "属实声明",
+    # identity
+    "身份证", "护照号", "identity", "出生日期", "社保",
+    # 法律敏感
+    "犯罪记录", "法律", "legal", "授权", "同意书",
+)
+
+
+def is_human_only(question: str) -> bool:
+    """判断问题是否属于 HUMAN-ONLY（AI 禁止代答）。"""
+    import re
+    q = question.lower()
+    for marker in _HUMAN_ONLY_MARKERS:
+        if re.search(marker, q):
+            return True
+    return False
