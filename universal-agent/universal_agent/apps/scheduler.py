@@ -47,6 +47,17 @@ def _flight_runner(fixtures: Path, sources: list[str], live: bool,
             max_results=3, request_delay_sec=1, timeout_ms=45000,
             headless=True, real_chrome=True))
         fetchers["skyscanner"] = sky.fetch
+    # CH4（FR-074）：第二 Flight Live 源（HTTP Adapter），UA_CTRIP_ENDPOINT 配置时启用
+    import os as _os
+    from universal_agent.adapters.ctrip import (
+        CtripFlightSkill, ctrip_marketplace_manifest)
+    if _os.environ.get("UA_CTRIP_ENDPOINT"):
+        ctrip_skill = CtripFlightSkill()
+        reg.register_marketplace(ctrip_marketplace_manifest().model_copy(
+            update={"health": ctrip_skill.health_check()["status"].lower()
+                    if ctrip_skill.health_check()["status"] == "HEALTHY" else "DEGRADED"}))
+        fetchers["ctrip_http"] = ctrip_skill.fetch
+        log.info("ctrip_http 第二 Flight 源已启用（%s）", _os.environ["UA_CTRIP_ENDPOINT"])
 
     async def runner(task: WatchTask) -> Dict:
         coord = ShadowScanCoordinator(

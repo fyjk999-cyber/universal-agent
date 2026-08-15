@@ -74,7 +74,7 @@
 
 | 限制 | 对应 FR/RULE | 代码证据 |
 |---|---|---|
-| **无真实多 Source Pipeline**：Hotel 无任何 Live 源（booking 仅 fixture）；Flight 仅 Skyscanner 一个 Live 源（属 CHAPTER 4） | FR-082 / FR-074（DoD 多源） | `adapters/replay/`、`adapters/skyscanner/` |
+| **多源 DoD 待真实端点联调**：第二 Flight 源（ctrip_http）与 Hotel 源（booking_http）已实现（HTTP Adapter + SkillProtocol + 失败隔离，本地 HTTP 测试 5 项全过），但真实端点需配置 `UA_CTRIP_ENDPOINT` / `UA_BOOKING_ENDPOINT`（+ key）并联网验证；第三 Flight 源与 cross-source Entity Resolution（FR-071）未做（属 CHAPTER 4） | FR-082 / FR-074 / FR-060 | `adapters/ctrip/`、`adapters/booking/`、`adapters/http/` |
 
 ### P1（高优先级，已披露）
 

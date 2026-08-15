@@ -22,6 +22,18 @@
 
 **剩余 P0（1 项，属 CHAPTER 4）**：多源 DoD（FR-074 第二/三 Flight 源 + FR-082 Hotel Live 源）。
 
+## 🚀 CH4 多源起步（2026-08-15 同日）
+
+| 原缺口 | 现状（代码实现 + 测试） | 剩余 |
+|---|---|---|
+| FR-060 HTTP Adapter 空占位 | ✅ `adapters/http/adapter.py`（超时/重试/失败隔离，HttpAdapterError） | — |
+| FR-074 仅 Skyscanner 单源 | ✅ **第二 Flight 源** `adapters/ctrip/`（CtripFlightSkill，SkillProtocol + HTTP JSON，fail-closed；健康检查显式 UNAVAILABLE/AUTH_REQUIRED）；scheduler 接线（UA_CTRIP_ENDPOINT） | 真实端点验证（需 key/端点）、第三源、跨源实体解析 |
+| FR-082 Hotel 无 Live 源 | ✅ **Hotel 源** `adapters/booking/`（BookingHotelSkill，同上模式） | 真实端点验证（UA_BOOKING_ENDPOINT） |
+| FR-064 失败隔离 | ✅ 测试锁定：源不可达 → UNAVAILABLE，整体 Task 仍完成 | — |
+| FR-056 Skill 不执行 | ✅ prepare_action 拒绝（测试锁定） | — |
+
+验证：`tests/integration/test_ch4_multi_source.py` 5 项（本地 HTTP 服务器全链路：HTTP→JSON→RawListing/RawHotel→Normalize→候选）。测试基线 **538 passed / 0 failed**。
+
 ---
 
 ## 0. 总体结论

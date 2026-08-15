@@ -66,7 +66,10 @@
 | Replay adapter | IMPLEMENTED | `adapters/replay/adapter.py` | 5 | 回放数据 | — |
 | Skyscanner（FR-074 Live） | IMPLEMENTED | `adapters/skyscanner/adapter.py`（SkillProtocol 垂直闭环） | 17（P8） | search 恒 duration-only PARTIAL（stops=-1，合规 fail-closed）；detail/verify/availability 占位（P2） | CH 4.1 详情页 |
 | FX 汇率 | IMPLEMENTED | `adapters/fx/service.py`（缓存+兜底） | 3 | 兜底表可能过时 | — |
-| HTTP / API / Browser Adapter（FR-060~062） | **EMPTY** | `adapters/{http,api,browser}/` 仅 `__init__.py`（已核实） | 0 | 通用接入层缺失（P1） | CH 3.1/3.2/3.3 |
+| HTTP Adapter（FR-060，CH4） | IMPLEMENTED | `adapters/http/adapter.py`（超时/重试/失败隔离） | test_ch4（全链路） | — | — |
+| Ctrip Flight 第二源（FR-074） | IMPLEMENTED（结构+测试） | `adapters/ctrip/` CtripFlightSkill（SkillProtocol + HTTP JSON + fail-closed + 健康检查） | test_ch4_multi_source | 真实端点待联调（UA_CTRIP_ENDPOINT） | CH4 联调 |
+| Booking Hotel 源（FR-082） | IMPLEMENTED（结构+测试） | `adapters/booking/` BookingHotelSkill | test_ch4（hotel） | 真实端点待联调（UA_BOOKING_ENDPOINT） | CH4 联调 |
+| API / Browser Adapter（FR-061/062） | **EMPTY** | `adapters/api/`、`adapters/browser/` 仅 `__init__.py`（已核实） | 0 | 未实现（P1） | CH 3.2/3.3 |
 | Mobile Adapter（FR-063） | **EMPTY** | `adapters/mobile/` 仅 `__init__.py`（已核实） | 0 | 连 Protocol 都未定义（P2） | CH 3.4 |
 | Tier3 官方源 | SKELETON | `adapters/official/registry.py`（注册器+健康检查） | 4 | 无真实航司适配器（合规） | v1.3 |
 | Failure Isolation（FR-064） | IMPLEMENTED | 多 query 并发 + 单源失败隔离 | test_i_failure_injection | — | — |
