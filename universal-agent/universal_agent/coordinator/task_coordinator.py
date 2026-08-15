@@ -66,6 +66,23 @@ class TaskCoordinator:
         self._emit(EventType.TASK_UPDATED, updated)
         return updated
 
+    def apply_update(self, task: WatchTask) -> WatchTask:
+        """P1.1：Host 唯一的状态更新入口（走 StateMachine 校验）。
+
+        替代直接 repo.update()：Host 请求把 Task 状态改为某值，
+        本命令校验转移合法性后落库；非法转移抛 TransitionError。
+        """
+        existing = self._get(task.id)
+        from ..core.state_machine import TransitionError, can_transition, transition
+        if task.state != existing.state:
+            if not can_transition(existing.state, task.state):
+                raise TransitionError(existing.state, task.state)
+            task.state = transition(existing.state, task.state)
+        task.version = existing.version + 1
+        updated = self.repo.update(task)
+        self._emit(EventType.TASK_UPDATED, updated)
+        return updated
+
     # ---- Queries（只读，不修改状态）----
     def get(self, task_id: str) -> Optional[WatchTask]:
         return self.repo.get(task_id)

@@ -24,10 +24,10 @@ class TestWatchDaemon:
         reg = TaskRegistry(tmp_path / "reg")
         t = _task("t1", ["09:00"])
         t.next_scan_at = None
-        # 手动设定 next_scan_at = 今天 09:00
-        from datetime import datetime, timezone
+        # 手动设定 next_scan_at = 已到期（过去 5 分钟，时间无关）
+        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
-        t.next_scan_at = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        t.next_scan_at = now - timedelta(minutes=5)
         reg.create(t)
         daemon = WatchDaemon(reg, tick_seconds=60)
         due = daemon.registry.due_tasks_utc(now)
@@ -38,9 +38,9 @@ class TestWatchDaemon:
         reg = TaskRegistry(tmp_path / "reg")
         t = _task("t1", ["09:00"])
         t.next_scan_at = None
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
-        t.next_scan_at = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        t.next_scan_at = now - timedelta(minutes=5)
         reg.create(t)
         ran = []
 
@@ -51,7 +51,7 @@ class TestWatchDaemon:
         daemon = WatchDaemon(reg, tick_seconds=60, runner=runner)
         await daemon._tick()
         assert ran == ["t1"]
-        # 扫描后推进 next_scan_at（下次不是 09:00 而是明天）
+        # 扫描后推进 next_scan_at（下次不是过去时间）
         refreshed = reg.get("t1")
         assert refreshed.scan_count == 1
         assert refreshed.next_scan_at is not None
@@ -62,9 +62,9 @@ class TestWatchDaemon:
         reg = TaskRegistry(tmp_path / "reg")
         t = _task("t1", ["09:00"])
         t.next_scan_at = None
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
-        t.next_scan_at = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        t.next_scan_at = now - timedelta(minutes=5)
         reg.create(t)
 
         async def bad_runner(task):

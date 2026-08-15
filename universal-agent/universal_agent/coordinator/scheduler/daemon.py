@@ -22,9 +22,7 @@ from universal_agent.core.contracts import ScanRun, ScanRunStatus, WatchTask
 from universal_agent.core.state_machine import alive_states
 from universal_agent.coordinator.checkpoint import Checkpoint
 from universal_agent.coordinator.scheduler.runguard import RunningTaskGuard
-from universal_agent.coordinator.task_registry import TaskRegistry
 from universal_agent.coordinator.task_registry.scanruns import (
-    ScanRunRepository,
     classify_error,
     is_fatal,
 )
@@ -37,14 +35,19 @@ ScanRunner = Callable[[WatchTask], Awaitable[Dict]]
 
 
 class WatchDaemon:
-    """周期驱动所有 Active Watch 任务；Retry 由 next_retry_at 驱动。"""
+    """周期驱动所有 Active Watch 任务；Retry 由 next_retry_at 驱动。
 
-    def __init__(self, registry: TaskRegistry, bus: Optional[EventBusProtocol] = None,
+    P1.1：registry / scan_runs 接受 Repository Protocol（SQLite 实现），
+    不再创建 JSON TaskRegistry / JSON ScanRunRepository（消除 Runtime Dual State）。
+    """
+
+    def __init__(self, registry, bus: Optional[EventBusProtocol] = None,
                  checkpoint: Optional[Checkpoint] = None,
-                 scan_runs: Optional[ScanRunRepository] = None,
+                 scan_runs=None,
                  tick_seconds: int = 60,
                  runner: Optional[ScanRunner] = None,
-                 misfire_policy: str = "RUN_ONCE") -> None:
+                 misfire_policy: str = "RUN_ONCE",
+                 lease=None, lease_owner: str = "watch-daemon") -> None:
         self.registry = registry
         self.bus = bus or InProcessEventBus()
         self.checkpoint = checkpoint
@@ -53,6 +56,10 @@ class WatchDaemon:
         self.runner = runner
         self.misfire_policy = misfire_policy
         self.guard = RunningTaskGuard()
+        # P1.1d：DB-backed RunLease（多进程防双运行；跨重启/多实例互斥）
+        self.lease = lease
+        self.lease_owner = lease_owner
+        self.lease_token: Optional[str] = None
         self._running = False
 
     async def run_forever(self) -> None:
@@ -67,6 +74,22 @@ class WatchDaemon:
 
     async def stop(self) -> None:
         self._running = False
+
+    # ---- P1.1d：RunLease（DB-backed 多进程互斥）----
+    def _try_acquire_lease(self, task_id: str) -> bool:
+        """尝试获取 DB lease（可选）。返回是否获得（无 lease 配置时视为通过）。"""
+        if self.lease is None:
+            return True
+        tok = self.lease.acquire(task_id, owner=self.lease_owner)
+        if tok is None:
+            return False
+        self.lease_token = tok
+        return True
+
+    def _release_lease(self, task_id: str) -> None:
+        if self.lease is not None and self.lease_token is not None:
+            self.lease.release(task_id, owner=self.lease_owner, token=self.lease_token)
+            self.lease_token = None
 
     async def _tick(self) -> None:
         from datetime import datetime, timezone
@@ -84,9 +107,13 @@ class WatchDaemon:
                 continue
             if not self.guard.try_acquire(task.id):
                 continue  # 已 RUNNING，防双启动
+            if not self._try_acquire_lease(task.id):
+                self.guard.release(task.id)
+                continue  # 其他进程持有 lease（P1.1d 多进程互斥）
             try:
                 await self._run_task(task)
             finally:
+                self._release_lease(task.id)
                 self.guard.release(task.id)
         # 3) misfire 补跑（RUN_ONCE 默认）
         if self.misfire_policy != "SKIP":
@@ -113,9 +140,13 @@ class WatchDaemon:
             # RunGuard：防与 baseline/misfire 双启动
             if not self.guard.try_acquire(run.task_id):
                 continue
+            if not self._try_acquire_lease(run.task_id):
+                self.guard.release(run.task_id)
+                continue  # 其他进程持有 lease（P1.1d）
             try:
                 await self._run_retry(task, run)
             finally:
+                self._release_lease(run.task_id)
                 self.guard.release(run.task_id)
 
     async def _run_retry(self, task: WatchTask, parent_run: ScanRun) -> None:
@@ -157,6 +188,9 @@ class WatchDaemon:
                 continue  # retry 优先
             if not self.guard.try_acquire(task.id):
                 continue
+            if not self._try_acquire_lease(task.id):
+                self.guard.release(task.id)
+                continue  # 其他进程持有 lease（P1.1d）
             try:
                 policy = MisfirePolicy(self.misfire_policy)
                 missed = sch.missed_run(task, now, policy, max_catch_up=1)
@@ -164,6 +198,7 @@ class WatchDaemon:
                     log.info("misfire 补跑任务 %s (scheduled %s)", task.id, missed.scheduled_at)
                     await self._run_task(task, is_misfire=True)
             finally:
+                self._release_lease(task.id)
                 self.guard.release(task.id)
 
     async def _run_task(self, task: WatchTask, is_misfire: bool = False) -> None:
@@ -229,11 +264,21 @@ async def load_watch_daemon(tasks_dir: Path, data_dir: Path,
                             runner: Optional[ScanRunner] = None,
                             tick_seconds: int = 60,
                             misfire_policy: str = "RUN_ONCE") -> WatchDaemon:
-    """从 tasks/*.yaml 加载所有 watch 任务并组装守护进程。"""
+    """从 tasks/*.yaml 加载所有 watch 任务并组装守护进程。
+
+    P1.1：使用 SQLite Repository 作为唯一 Runtime Truth，不再创建
+    JSON TaskRegistry / JSON ScanRunRepository。
+    """
     from universal_agent.coordinator.task_registry import load_watch_task
-    registry = TaskRegistry(data_dir / "registry")
-    checkpoint = Checkpoint(data_dir / "checkpoint.json")
-    scan_runs = ScanRunRepository(data_dir / "scan_runs")
+    from universal_agent.persistence import (
+        Database,
+        SqliteScanRunRepository,
+        SqliteTaskRepository,
+    )
+    db = Database(Path(data_dir) / "universal_agent.db")
+    registry = SqliteTaskRepository(db)
+    scan_runs = SqliteScanRunRepository(db)
+    checkpoint = Checkpoint(Path(data_dir) / "checkpoint.json")
 
     for yaml_path in sorted(Path(tasks_dir).glob("*.yaml")):
         if yaml_path.name.startswith("_"):

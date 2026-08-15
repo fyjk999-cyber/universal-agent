@@ -34,9 +34,10 @@ class MockJarvisHostAdapter(HostProtocol):
         return self.coordinator.create_watch(task)
 
     def update_task(self, task: WatchTask) -> WatchTask:
+        """P1.1：经 Coordinator 命令（StateMachine 校验），禁止直接 repo.update。"""
         if self.coordinator is None:
             raise TaskCommandError("no TaskCoordinator wired")
-        return self.coordinator.repo.update(task)
+        return self.coordinator.apply_update(task)
 
     def pause_task(self, task_id: str) -> WatchTask:
         if self.coordinator is None:

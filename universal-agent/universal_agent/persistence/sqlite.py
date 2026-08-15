@@ -16,7 +16,7 @@ from typing import Optional
 
 log = logging.getLogger("ua.persistence")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -130,6 +130,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE TABLE IF NOT EXISTS source_health (
     marketplace_id TEXT PRIMARY KEY,
     data TEXT NOT NULL
+);
+
+-- P1.1: DB-backed Run Lease（多进程防双运行）
+CREATE TABLE IF NOT EXISTS run_leases (
+    task_id TEXT PRIMARY KEY,
+    lease_owner TEXT NOT NULL,
+    lease_token TEXT NOT NULL,
+    acquired_at TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL,
+    lease_expires_at TEXT NOT NULL
 );
 """
 
