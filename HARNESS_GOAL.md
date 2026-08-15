@@ -7,12 +7,12 @@
 ## 1. 当前运行时状态（SPAC §51）
 
 ```
-PROJECT_STATUS:      DEVELOPMENT（核心 v1.0 FINAL VERIFICATION ACCEPTED；Host 侧待 Chapter 2 终态验收）
-CURRENT_CHAPTER:     CHAPTER 0 — Repository Reality Lock（进行中）
-CURRENT_SUBCHAPTER:  0.1~0.5（回归✅ / Matrix 重生成 / 文档对齐 / Legacy 审计✅ / 文档建立）
+PROJECT_STATUS:      DEVELOPMENT（514 tests 全绿；SPAC 硬性点 P0×6 + P1×15 未达成——2026-08-15 深度审计修正，v1.0 验收结论过高）
+CURRENT_CHAPTER:     CHAPTER 2 — DeepSeek Harness Production Integration（P0 收敛起点）
+CURRENT_SUBCHAPTER:  2.1 run_task_once 真实实现（待开始）
 LAST_TEST_STATUS:    PASS（514 passed / 0 failed）
 BLOCKERS:            NONE
-NEXT_ACTION:         完成 Chapter 0 文档对齐 → agent-project-test 门禁 → commit+push GitHub
+NEXT_ACTION:         P0 收敛：FR-030 run_task_once → FR-031 通知 → FR-032 审批 → FR-033 Bridge 可移植 → RULE-003 接线 → CH2 Gate（§36 Acceptance Flow）
 GLOBAL_TEST_REQUIRED: TRUE（每次大 Chapter 后全量回归）
 ```
 

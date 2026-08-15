@@ -4,7 +4,7 @@
 > 复核基线：`cd universal-agent && ../.venv/bin/python -m pytest -q` → **514 passed / 0 failed**
 > 状态图例：`IMPLEMENTED` = 真实实现+测试 / `PARTIAL` = 部分实现 / `MOCK` = 替身 /
 > `REPLAY` = 仅回放数据 / `SKELETON` = 骨架 / `EMPTY` = 空占位 / `BROKEN` = 有缺陷
-> 对齐：SPAC.md（Source of Truth）+ FINAL_VERIFICATION_REPORT.md（28 项 Final Acceptance Criteria）
+> 对齐：SPAC.md（Source of Truth）+ MISSING_FEATURE_REPORT.md（深度审计，P0×6/P1×15）
 
 ## 一、Core Architecture
 
@@ -34,9 +34,9 @@
 
 | Capability | Status | Implementation | Tests | Known Limitations | Next Action |
 |---|---|---|---|---|---|
-| Repository Protocol + SQLite | IMPLEMENTED | `persistence/protocol.py` + `sqlite.py` + `repos.py` | test_no_json_dual_state（P1.1） | — | — |
-| RepositorySet 覆盖（§8） | IMPLEMENTED | tasks/scan_runs/events/outbox/memory/observations/notifications/approvals/actions/audit/source_health 表 | P1.1/P2 集成 | — | — |
-| 无可写 JSON dual state | IMPLEMENTED | JSON 仅 Export/Debug/Log | test_no_json_dual_state | — | — |
+| Repository Protocol + SQLite | IMPLEMENTED | `persistence/protocol.py` + `sqlite.py` + `repos.py`（9 个 repo 类 + 全表 schema） | test_no_json_dual_state（P1.1） | — | — |
+| RepositorySet 装配（§8） | **PARTIAL** | `service.py:37-42` 仅接 tasks/scan_runs/memory；events/outbox/observations/notifications/approvals/actions/audit/source_health 的 SQLite repo **零装配（仅测试实例化）** | P1.1/P2 集成 | **RULE-003 违规（P0）**：approvals.json/idempotency.json/ks.json/dedup JSON/observations.json 运行时仍可写 | **P0：全部并入 RepositorySet** |
+| JSON 仅限 Export/Debug/Log | **FAIL** | approval/inbox.py:24、idempotency/store.py:36、killswitch.py:18、dedup.py:42-48、observations/store.py 运行时写 JSON | — | 第二可写真相（P0） | P0 接线 |
 
 ## 四、Data Contracts
 
@@ -76,7 +76,7 @@
 | Capability | Status | Implementation | Tests | Known Limitations | Next Action |
 |---|---|---|---|---|---|
 | Verification 分级（FR-052） | IMPLEMENTED | `core/verification/verifier.py`（Tier1-4 + Evidence） | 5 + shadow_scan 实测 | 置信度默认固定 | — |
-| Observation/Evidence/Decision 分离（RULE-006/FR-130~133） | IMPLEMENTED | `core/evidence/` + decision supporting_evidence + 反查链 | test_p3 + 实测 | — | — |
+| Observation/Evidence/Decision 分离（RULE-006/FR-130~133） | **PARTIAL** | Observation + Evidence（`core/verification/verifier.py`）真实；**Decision 层缺失**：`core/decision/` 空目录、无 Decision 契约、无 supporting_evidence（FR-132，P1） | test_p3 + 实测 | 决策不可审计反查（P1） | CH 决策层补建 |
 | Deterministic Decision Pipeline（§24） | IMPLEMENTED | normalize→entity→constraint→dedup→score→rank→change→verify→opportunity | 全链测试 | — | — |
 | Change Detection | IMPLEMENTED | `core/change_detection/` | 2 | — | — |
 | Opportunity Engine（FR-140/141） | IMPLEMENTED | `core/opportunity/engine.py`（percentile/hist_low/trend/availability） | test_p11 + 实测 score=75.4 | rare 稀有度维度未显式（FR-142，P2） | CH 5 |
@@ -127,17 +127,17 @@
 | shadow_scan CLI | IMPLEMENTED | `apps/shadow_scan.py`（replay + --live） | 实测：5 raw→4 candidates→Top5→机会 75.4→通知 | — | — |
 | agent_cli 多域 | IMPLEMENTED | `apps/agent_cli.py`（flight/hotel/jobs/bundle/prepare/execute） | 冒烟 rc=0 | — | — |
 | scheduler CLI | IMPLEMENTED | `apps/scheduler.py`（SQLite + RunLease） | 集成测试 | — | — |
-| DSH Bridge（FR-033） | **PARTIAL** | `dsh/uabrg-plugin.js` ua_watch_scan 工具 + scheduler 事件 | 实测 | **硬编码 /Users/... 路径（P1）** | CH 2.4 |
-| Harness 通知/审批（FR-031/032） | **PARTIAL** | adapter 侧仅日志/固定 pending | — | P1 | CH 2.2/2.3 |
+| DSH Bridge（FR-033） | **PARTIAL** | `dsh/uabrg-plugin.js` ua_watch_scan 工具 + scheduler 事件 | 实测 | **硬编码 /Users/... 路径（P0）** | CH 2.4 |
+| Harness 通知/审批（FR-031/032） | **PARTIAL** | adapter 侧仅日志/固定 pending | — | **P0**（通知不送达/审批不可决） | CH 2.2/2.3 |
 | CI Gates | IMPLEMENTED | `.github/workflows/ci.yml`（3.11+3.12，ruff+mypy+coverage） | P21/22 | — | — |
 | 依赖可复现 | IMPLEMENTED | pyproject 依赖组（dev/browser/flight-live/hotel-live/jobs-live） | P22 | — | — |
 
 ---
 
-## 总结（2026-08-15）
+## 总结（2026-08-15，深度审计修正版）
 
-- **IMPLEMENTED**: 约 46 项（含 SQLite RepositorySet、Memory 8 子域、Reliable Events、Skyscanner Live、Controlled Actions 全链、Jarvis Host Swap、CI）
-- **PARTIAL**: 约 10 项 — Harness 生产集成（FR-030~033）、Flight/Hotel/Jobs 多源、通用 Adapter、新域 Live、Notification 分级、生产凭据后端
-- **EMPTY**: 6 项 — adapters/{http,api,browser,mobile}、security/{identity_vault,session_broker}（Jobs Application State 同）
-- **BROKEN**: 0 项（P0 时代 5 项 BROKEN 已在 SPRINT A/A.1 全部修复）
-- 关键结论：**无未披露 P0/P1**；P1 缺口 9 项全部在 `MISSING_FEATURE_REPORT.md` 披露并映射到下一阶段路线（ROADMAP.md v1.1+）
+- **IMPLEMENTED**: 约 44 项（含 SQLite schema + tasks/scan_runs/memory 装配、Memory 8 子域、Skyscanner Live、Controlled Actions 机制、Jarvis Host Swap、CI）
+- **PARTIAL**: 约 12 项 — Harness 生产集成（FR-030~033）、RepositorySet 装配（RULE-003）、Reliable Events 接线、多源、新域 Live、Notification 分级、生产凭据后端、Decision 层
+- **EMPTY**: 8 项 — adapters/{http,api,browser,mobile}、security/{identity_vault,session_broker}、core/decision/、core/constraints/
+- **BROKEN**: 0 项
+- 关键结论（修正）：**P0×6 + P1×15** 已全部在 `MISSING_FEATURE_REPORT.md`（§3 逐条文件:行号证据）披露并映射到 ROADMAP v1.1 修复路线；**PROJECT_STATUS = DEVELOPMENT**（未达 SPAC §53 DoD：Notify/Approve 未真实送达、多源未达标、RULE-003 未闭环）

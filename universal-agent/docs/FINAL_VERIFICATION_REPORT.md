@@ -95,3 +95,23 @@
 
 **Universal Agent v1.0 达到生产级验收标准：514 tests 全绿，TEST A-J 全 PASS，
 28 项 Final Acceptance Criteria 全部满足。**
+
+---
+
+## ⚠️ 2026-08-15 深度代码审计修正（重要，必须阅读）
+
+> 上述结论基于 TEST A–J 冒烟/生命周期/安全边界验收。`MISSING_FEATURE_REPORT.md`
+> 随后按 SPAC 逐 FR/RULE 深度复核，发现 **TEST A–J 未覆盖的 6 项 P0 + 15 项 P1 问题**，
+> 本报告部分"✅"判定**过高**，修正如下：
+
+| 原判定（本报告） | 修正（2026-08-15 审计） | 证据 |
+|---|---|---|
+| 1 SQLite 唯一 Runtime Truth ✅ | **PARTIAL（RULE-003 违规，P0）**：tasks/scan_runs/memory 已 SQLite；approvals.json / idempotency.json / ks.json / dedup JSON / observations.json 仍是运行时第二可写真相；`service.py` RepositorySet 仅接 tasks/scan_runs/memory（9 个 SQLite repo 零装配） | `actions/approval/inbox.py:24`、`actions/idempotency/store.py:36`、`actions/policy/killswitch.py:18`、`notifications/dedup.py:42-48`、`service.py:37-42` |
+| 2 无可写 JSON dual state ✅ | **部分成立**：WatchDaemon 路径已 SQLite；Approval/Idempotency/KillSwitch/通知 dedup/Observations 路径仍 JSON 可写 | 同上 |
+| 6 Event 具备 durability ✅ | **组件存在但未接线**：SQLite EventStore/Outbox/Dispatcher 仅测试实例化，生产服务未装配（FR-021，P1） | `events/reliable.py` 无生产调用点 |
+| 8 Notification persistent ✅ | **PARTIAL**：dedup 持久化为 JSON（非 SQLite）；notifications 表 + SqliteNotificationRepository 零装配；host 通知仅日志（FR-031，P0） | `persistence/repos.py:162-172` |
+| 10/12 Hotel / Jobs Live 完整闭环 ✅ | **PARTIAL**：均为 replay/协议层，无真实 Live 源（FR-082 / FR-100/101，P0/P1） | `adapters/replay/` |
+| 24 Jarvis Host Swap Core 零修改 ✅ | 成立，但 `run_task_once` 双适配器均为 not_implemented 桩且测试固化（FR-030，P0） | `tests/migration/test_host_swap.py:86` |
+| 28 项 Final Acceptance Criteria 全部满足 | **过高**：TEST A–J 通过 ≠ SPAC 硬性点全部达成；按 SPAC §53 Definition of Done，**PROJECT_STATUS = DEVELOPMENT**（Notify/Approve 未真实送达、多源未达标、RULE-003 未闭环） | `MISSING_FEATURE_REPORT.md` §1/§3 |
+
+**修正后结论**：v1.0 的 514 tests 与 TEST A–J 仍有效（启动/生命周期/安全边界）；但 **SPAC 硬性点存在 6×P0 + 15×P1 未达成**，真实状态为 **PROJECT_STATUS = DEVELOPMENT**。下一阶段按 P0 收敛顺序执行（CH2 FR-030~033 → RULE-003 接线 → 多源 DoD → CH1 Gate）。

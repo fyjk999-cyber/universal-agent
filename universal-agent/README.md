@@ -14,7 +14,8 @@ REMEMBER → WATCH → OBSERVE → NORMALIZE → COMPARE → VERIFY → DECIDE
 
 ## 当前状态（v1.0）
 
-- **v1.0 FINAL VERIFICATION ACCEPTED（2026-08-14）**：**514 tests / 0 failed**，`agent-project-test` 验收 TEST A–J 全 PASS，28 项 Final Acceptance Criteria 全部满足（见 [`docs/FINAL_VERIFICATION_REPORT.md`](docs/FINAL_VERIFICATION_REPORT.md)）。
+- **v1.0 FINAL VERIFICATION ACCEPTED（2026-08-14）**：**514 tests / 0 failed**，`agent-project-test` 验收 TEST A–J 全 PASS（见 [`docs/FINAL_VERIFICATION_REPORT.md`](docs/FINAL_VERIFICATION_REPORT.md)）。
+- ⚠️ **2026-08-15 深度代码审计（[`MISSING_FEATURE_REPORT.md`](../MISSING_FEATURE_REPORT.md)）**：TEST A–J 未覆盖的 SPAC 硬性点存在 **6×P0 + 15×P1**（FR-030~033 Harness 集成、RULE-003 SQLite 接线、多源 DoD、Decision 层等），**PROJECT_STATUS = DEVELOPMENT**（未达 SPAC §53 DoD）；修复路线见 [`docs/ROADMAP.md`](docs/ROADMAP.md) v1.1。
 - 已完成 Sprint：P0 Correctness Hardening（A/A1）→ SQLite Runtime Unification（P1.1）→ Reliable Events/Outbox/DLQ（P2）→ Memory 8 子域（P3）→ Observability（P4）→ Skill Runtime（P5）→ Source Health/Governor（P6）→ Adapters（P7）→ Skyscanner 真源（P8）→ Hotel（P9）→ Travel Bundle（P10）→ Opportunity（P11）→ Preference Learning（P12）→ Jobs/CareerPilot（P13）→ CredentialVault（P14）→ L2 Prepare（P15）→ Controlled Actions + KillSwitch（P16）→ Railway/Ecommerce/Food Domains（P17–19）→ Jarvis Host Swap（P20）→ CI Gates + Reproducibility（P21/22）。
 - SPAC Chapter 完成度与能力明细见 [`docs/ROADMAP.md`](docs/ROADMAP.md)、[`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md)、[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md)。
 

@@ -50,37 +50,53 @@
 
 ## ⚠️ 当前已知限制（未解决，v1.0 后仍存在）
 
-> 按 Severity 分级；P0 = 必修（安全/正确性），P1 = 高，P2 = 中，P3 = 低。
-> v1.0 验收确认**无未披露 P0/P1**；下表为已披露的剩余缺口。
+> 按 Severity 分级；P0 = 必修（SPAC 硬性点/架构违规），P1 = 高，P2 = 中，P3 = 低。
+> ⚠️ **2026-08-15 深度代码审计修正**：`MISSING_FEATURE_REPORT.md` 逐 FR/RULE 复核后发现
+> **6 项 P0 问题**（含 RULE-003 运行时违规、FR-030~033 Harness 集成缺口），v1.0 验收
+> （TEST A-J / 28 项 Final Acceptance Criteria）**未覆盖这些点**——即"无未披露 P0/P1"的
+> 早期结论已失效，以下 P0/P1 为审计后如实披露。
 
-### P0（无未披露项）
+### P0（必修，6 项，详见 MISSING_FEATURE_REPORT §3.1）
 
-v1.0 验收（28 项 Final Acceptance Criteria）+ 2026-08-15 代码审计：**无未披露 P0**。
+| 限制 | 对应 FR/RULE | 代码证据 |
+|---|---|---|
+| **`run_task_once()` 仍为 not_implemented 桩**（Harness+Jarvis 双适配器），且测试将桩固化为断言 | FR-030 | `hosts/deepseek_harness/adapter.py:56-57`、`hosts/jarvis/adapter.py:57-58`、`tests/migration/test_host_swap.py:86` |
+| **Harness 通知从不真实送达**：send_notification 仅 log；事件止于进程内 bus（handlers 空）；SQLite notifications 表零装配；DSH 插件是纯 shell 桥不读通知 | FR-031 | `adapter.py:70-71`、`events/handlers/__init__.py`（0 字节）、`persistence/repos.py:162-172` 零装配、`dsh/uabrg-plugin.js` |
+| **审批无法被真实用户决策**：host request_approval 固定返回 pending；ApprovalInbox.decide() 生产零调用，无 UI/API/CLI 入口 | FR-032 | `adapter.py:73-75`、`actions/approval/inbox.py:60-72`（仅测试调用） |
+| **DSH Bridge 硬编码 `/Users/huhongjie/...` 双路径**，零 UA_* 环境变量/自动发现/显式失败 | FR-033 | `dsh/uabrg-plugin.js:20-21` |
+| **RULE-003 运行时违规**：approvals.json / idempotency.json / ks.json / 通知 dedup JSON / observations.json 仍是第二可写真相；9 个 SQLite repo 定义但零装配（RepositorySet 仅接 tasks/scan_runs/memory） | RULE-003 / CH1-1.1 | `actions/approval/inbox.py:24`、`actions/idempotency/store.py:36`、`actions/policy/killswitch.py:18`、`notifications/dedup.py:42-48`、`service.py:37-42` |
+| **无真实多 Source Pipeline**：Hotel 无任何 Live 源（booking 仅 fixture）；Flight 仅 Skyscanner 一个 Live 源 | FR-082 / FR-074（DoD 多源） | `adapters/replay/`、`adapters/skyscanner/` |
 
 ### P1（高优先级，已披露）
 
 | 限制 | 对应 FR | 影响 |
 |---|---|---|
-| **DeepSeek Harness 生产集成未完成**：`run_task_once()` 仍返回 `{"status": "not_implemented"}`；`send_notification` 仅写日志；`request_approval` 固定返回 pending | FR-030 / FR-031 / FR-032 | Harness 侧无法真正执行单次扫描 / 真实通知 / 真实审批流转（CHAPTER 2 = PARTIAL；已由 FINAL_VERIFICATION_REPORT 2026-08-15 审计补充披露） |
-| **DSH Bridge 硬编码路径**：`dsh/uabrg-plugin.js` 硬编码 `/Users/huhongjie/...`，未接 `UA_ROOT/UA_PYTHON/UA_DATA_DIR/UA_CONFIG`，换机器需改代码 | FR-033 | 不可移植；违反 FR-033「禁止 silent fallback 到开发者机器路径」 |
-| **第二/第三 Flight Live Source 未接**：Skyscanner 是唯一 Flight Live 源；Ctrip/Fliggy/Tongcheng 无 Live adapter | FR-074 | 无跨平台交叉验证；单源故障无备份（CHAPTER 4 = PARTIAL） |
-| **CredentialVault 为 dev 混淆，非生产级**：base64+XOR、固定 dev key，明文仅受轻量混淆保护 | FR-191 / FR-192 | 生产部署应接 macOS Keychain / Windows Credential Manager；当前不满足 FR-191/192（CHAPTER 8 = PARTIAL） |
-| **Hotel 无真实 Live Source**：HotelScanCoordinator + 政策归一化已实现，但仅 replay 数据，无真实 Hotel adapter | FR-082 | 无法与真实平台对照验证；不满足 CH 4.4 |
-| **通用 Adapter 层为空占位**：`adapters/{http,api,browser}/` 仅 `__init__.py`，无 HTTP/API/Browser Adapter 实现 | FR-060 / FR-061 / FR-062 | 新源接入只能靠手写 adapter；Browser 深度（登录态/验证）未覆盖（CHAPTER 3 = PARTIAL） |
-| **Jobs 无真实 Live Source**：官方 Careers / LinkedIn / SEEK 仅 `JobSkillProtocol` 契约，无真实适配器 | FR-100 / FR-101 | Jobs 管线可用但无真实数据（CHAPTER 6 = PARTIAL） |
+| **Reliable Events 未接线**：SQLite EventStore/Outbox/Dispatcher/DLQ 组件齐全但仅测试实例化，生产服务未装配 | FR-021 | 事件可靠性只有组件没有装配（CH1 = PARTIAL） |
+| **RunLease 生产未装配**：DB 互斥实现存在，daemon 未使用 | FR-014 | 多进程防双运行无生产保证 |
+| **崩溃恢复缺 RUNNING ScanRun 接管**：重启只处理 FAILED_RETRYABLE，RUNNING 孤儿未接管 | FR-015 | 崩溃窗口内 ScanRun 悬挂 |
+| **L2-L4 主网关硬禁**：`gateway.py:28` BLOCKED_LEVELS 含 L2/L3/L4，受控执行需绕过主网关（默认拒绝设计但无网关内放行路径） | FR-172/173 | 受控执行链路与主网关未合一 |
+| **生产凭据后端未实现**：CredentialVault 为 dev 混淆，无 macOS Keychain / Windows Credential Manager | FR-191 / FR-192 | 生产部署不满足安全要求 |
+| **IdentityVault / SessionBroker 空占位** | FR-193 / FR-194 | 身份与会话独立管理缺失 |
+| **无 Decision 层 / supporting_evidence**：core/decision/ 空目录，Decision 无证据引用 | FR-132 / RULE-006 | 决策不可审计反查 |
+| **无 why_this_bundle**：Bundle 结果无解释字段 | FR-092 | 推荐不可解释 |
+| **HTTP/API/Browser/Mobile Adapter 全为空目录** | FR-060~063 | 通用接入层缺失（CH3 = PARTIAL） |
+| **通知事件类型缺失**：events/types.py 缺 PRICE_DROP/WATCH_FAILED/ACTION_RESULT 等 | FR-164 | 通知事件分类不全 |
+| **KillSwitch 未覆盖 L0/L1 gateway 与 ActionPreparer** | FR-180 | 杀开关覆盖不全 |
+| **机会评分缺 Time Remaining / Preference / Source Health 维度** | FR-140/141/142 | OpportunityScore 不完整 |
 
 ### P2（中优先级）
 
 | 限制 | 对应 FR | 影响 |
 |---|---|---|
-| **Skyscanner search 为 duration-only PARTIAL**：搜索页无完整航段，stops=-1；detail/verify/availability 为安全占位（未接真实详情页） | FR-073 / FR-052 / FR-053 | 合规 fail-closed，但 Top 推荐永远缺 STRUCTURED 数据；详情页补齐后（v1.2 #13）可升级 |
-| **Railway / Ecommerce / Food 仅完成域骨架**：Raw 契约 + normalize + entity_key 已实现，Constraint/Score/Skill/Source/Verify/Watch/Notification 未做 | FR-110~117 等 | 域存在但无 Live 能力（CHAPTER 7 = PARTIAL） |
-| **Mobile Adapter 为空占位**：连第一阶段要求的 Protocol/Contract 都未定义 | FR-063 | 移动端接入无从谈起（CH 3.4 未开始） |
-| **Notification priority/channel 未完整**：dedup 有 cooldown，但无 LOW/NORMAL/HIGH/URGENT 分级、无 Harness/Desktop/Mobile/Webhook/Jarvis 通道抽象 | FR-162 / FR-163 | 通知分级与多通道无法实现 |
-| **Outbox Dispatcher 为拉模式，未接 daemon 后台循环**：dispatch_once/run_forever 已实现，但 WatchDaemon 未自动驱动；RunLease 无 heartbeat 后台线程（renew 由调用方负责） | FR-021 / FR-014 | 事件投递/租约续期依赖调用方主动触发 |
-| **Tier3 官方源为骨架**：`adapters/official/registry.py` 仅注册器 + 健康检查，无真实航司适配器（合规：不登录/不购买/不绕过验证码） | FR-052（Tier3） | 官方渠道交叉验证不可用 |
-| **Jobs 提交被 ActionGateway 拒绝**（IRREVERSIBLE）：`build_application_plan` 为 L1 且 IRREVERSIBLE，提交类操作被网关拦下 | FR-102 / FR-173 | 应用提交为设计边界，但在 L3/L4 稳定前无真实提交通道 |
-| **PreferenceLearner 固定用户 u1**：多用户隔离未验证 | FR-150 / FR-152 | 多用户场景偏好会串 |
+| **Skyscanner search 为 duration-only PARTIAL**：详情页未接，stops=-1 | FR-073 / FR-052 / FR-053 | Top 推荐缺 STRUCTURED 数据 |
+| **Railway / Ecommerce / Food 仅域骨架**：Raw+normalize+entity_key；无 Score/Skill/Source/Verify/Watch/Notification | FR-110~117 等 | 域存在但无 Live 能力（CH7 = PARTIAL） |
+| **Mobile Adapter 空占位**（连 Protocol 都未定义） | FR-063 | 移动端接入无从谈起 |
+| **ConditionWatch / Composite 未实现**：core/constraints/ 空目录；触发为 OR 语义 | FR-004 / FR-005 | 组合条件通知不可用 |
+| **Notification priority/channel 未完整** | FR-162 / FR-163 | 通知分级与多通道无法实现 |
+| **Outbox Dispatcher 拉模式未接 daemon；RunLease 无 heartbeat** | FR-021 / FR-014 | 投递/续期依赖主动触发 |
+| **Tier3 官方源为骨架** | FR-052（Tier3） | 官方渠道交叉验证不可用 |
+| **Jobs 提交被 ActionGateway 拒绝（IRREVERSIBLE）** | FR-102 / FR-173 | 应用提交为设计边界，无真实通道 |
+| **PreferenceLearner 固定用户 u1** | FR-150 / FR-152 | 多用户偏好会串 |
 
 ### P3（低优先级）
 
@@ -104,6 +120,6 @@ v1.0 验收（28 项 Final Acceptance Criteria）+ 2026-08-15 代码审计：**�
 
 ---
 
-## 附录：v1.0 剩余缺口 → 下一阶段
+## 附录：剩余缺口 → 下一阶段
 
-所有 P1 缺口（CHAPTER 2 FR-030~033、FR-074 多源、FR-191/192 生产凭据、FR-082 Hotel Live、FR-060~062 Adapter、FR-100/101 Jobs Live）已列入 [`ROADMAP.md`](ROADMAP.md)「下一阶段路线（v1.1+）」并给出优先级；由 `MISSING_FEATURE_REPORT.md` 持续跟踪。
+所有 P0/P1 缺口（CHAPTER 2 FR-030~033、RULE-003 接线、FR-074 多源、FR-082 Hotel Live、FR-191/192 生产凭据、FR-060~062 Adapter、FR-100/101 Jobs Live、FR-132/092 决策与解释等）已列入 [`ROADMAP.md`](ROADMAP.md)「下一阶段路线」并给出优先级；完整条目（含文件:行号证据）见 [`MISSING_FEATURE_REPORT.md`](../../MISSING_FEATURE_REPORT.md)。

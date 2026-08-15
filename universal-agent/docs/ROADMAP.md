@@ -7,9 +7,8 @@
 **v1.0 完成 — FINAL VERIFICATION ACCEPTED（2026-08-14）**
 
 - **514 tests / 0 failed**（`cd universal-agent && ../.venv/bin/python -m pytest -q` 复核通过）
-- `agent-project-test` 全量验收 **TEST A–J 全 PASS**（PASS 10 ｜ FAIL 0 ｜ PARTIAL 0 ｜ UNVERIFIABLE 0）→ **ACCEPTED**
-- 28 项 Final Acceptance Criteria 全部满足（见 [`docs/FINAL_VERIFICATION_REPORT.md`](FINAL_VERIFICATION_REPORT.md)）
-- 说明：Core v1.0 验收成立；SPAC CHAPTER 2（DeepSeek Harness Production Integration）存在 4 项已披露 P1 缺口（FR-030~033，2026-08-15 代码审计补充确认），由 `MISSING_FEATURE_REPORT.md` 跟踪，列入下一阶段（v1.1）修复。
+- `agent-project-test` 全量验收 **TEST A–J 全 PASS**（PASS 10 ｜ FAIL 0 ｜ PARTIAL 0 ｜ UNVERIFIABLE 0）→ **ACCEPTED**（该验收覆盖 Core 冒烟/生命周期/安全边界）
+- ⚠️ **2026-08-15 深度代码审计修正（`MISSING_FEATURE_REPORT.md`）**：TEST A–J 未覆盖的 SPAC 硬性点存在 **6 项 P0**（FR-030/031/032/033 Harness 集成 + RULE-003 SQLite 接线违规 + 多源 DoD 未满足）与 15 项 P1，v1.0 验收的"28 项 Final Acceptance Criteria 全部满足"结论**过高**，实际达成度见下表 Chapter 完成度。**PROJECT_STATUS = DEVELOPMENT**（未达 SPAC §53 Definition of Done：Notify/Approve 未真实送达、多源未达标）。
 
 ## 版本历史（依据各 SPRINT_REPORT）
 
@@ -35,7 +34,7 @@
 | Chapter | 名称 | 完成度 | 依据 |
 |---|---|---|---|
 | CHAPTER 0 | Repository Reality Lock | **COMPLETE** | `scanner/ tasks/` 已归档至 `legacy/`；SPAC.md 建立；README/ROADMAP/KNOWN_LIMITATIONS/FINAL_VERIFICATION 与代码对齐（本文件重写即完成 0.3）；MISSING_FEATURE_REPORT 由架构审计跟踪 |
-| CHAPTER 1 | Runtime Composition | **COMPLETE** | RepositorySet 全覆盖（tasks/scan_runs/events/outbox/observations/notifications/approvals/actions/audit/source_health，P1/P1.1/P2）；restart/persistence/crash recovery/multi-process Gate PASS（TEST A/C/I） |
+| CHAPTER 1 | Runtime Composition | **PARTIAL** | SQLite schema 全表存在（`persistence/sqlite.py`），但 `service.py:37-42` RepositorySet 仅接 tasks/scan_runs/memory；**events/outbox/observations/notifications/approvals/actions/audit/source_health 的 9 个 SQLite repo 定义但零装配（仅测试实例化）**；运行期 approvals/idempotency/dedup/observations 仍为 JSON（RULE-003 违规，P0）；OutboxDispatcher 未接线（2026-08-15 深度审计修正，原"COMPLETE"过高） |
 | CHAPTER 2 | DeepSeek Harness Production Integration | **PARTIAL** | 2.2 事件/2.3 审批/2.6 重启恢复有实现；但 **FR-030 `run_task_once()` 仍 `not_implemented`、FR-031 通知仅写日志、FR-032 审批固定返回 pending、FR-033 DSH Bridge 硬编码 `/Users/...`**（代码证据见 FINAL_VERIFICATION_REPORT「已披露缺口」表，P1 级，2026-08-15 审计确认） |
 | CHAPTER 3 | Generic Source Runtime | **PARTIAL** | 3.5 CapabilityResolver ✅（P5）、3.6 Source Health ✅（P6）、3.7 Failure Isolation ✅（TEST I）；**3.1 HTTP / 3.2 API / 3.3 Browser / 3.4 Mobile 均为空占位**（`adapters/{http,api,browser,mobile}/` 仅 `__init__.py`） |
 | CHAPTER 4 | Travel Multi-Source | **PARTIAL** | 4.1 Skyscanner hardening ✅（P8，唯一 Flight Live 源）；**4.2/4.3 第二/第三 Flight Source（Ctrip/Fliggy/Tongcheng）未接（FR-074）、4.4 Hotel Live Source 未接（仅 replay）、4.5 单源下无法做 cross-source entity resolution、4.7 Live Bundle 依赖单 Flight 源 + replay Hotel** |
@@ -45,7 +44,7 @@
 | CHAPTER 8 | Controlled Execution Productionization | **PARTIAL** | 8.4 Approval Lifecycle / 8.5 L3 / 8.6 L4 / 8.7 Reconcile / 8.8 Compensation / 8.9 KillSwitch ✅（P15/P16）；**8.1 生产凭据后端未做（CredentialVault 为 dev 混淆，FR-191/192）、8.2 IdentityVault / 8.3 SessionBroker 空占位**（FR-193/194） |
 | CHAPTER 9 | Jarvis Ready | **COMPLETE** | P20 Host Swap 全链路验证：Harness 断开 → Jarvis 接入 → Task/Memory 状态继续（同一 SQLite），全 HostProtocol 方法验证，**Core 零修改**（TEST H） |
 
-**结论：Core 层（CH 0/1/5/9）COMPLETE；Host 生产集成（CH 2）、通用 Adapter（CH 3）、Travel 多源（CH 4）、Jobs/新 Domain Live（CH 6/7）、生产安全后端（CH 8）为 PARTIAL，全部列入下一阶段路线。**
+**结论（2026-08-15 深度审计修正）：仅 CH 0（Reality Lock）、CH 5（Opportunity Watch）、CH 9（Jarvis Ready）COMPLETE；CH 1（Runtime 接线）、CH 2（Harness 生产集成）、CH 3（通用 Adapter）、CH 4（Travel 多源）、CH 6（Jobs）、CH 7（新 Domain）、CH 8（受控执行生产化）均为 PARTIAL——P0×6 / P1×15 全部列入下一阶段路线（v1.1）。**
 
 ## 下一阶段路线（v1.1+）
 
@@ -56,11 +55,11 @@
 
 | # | 工作项 | 对应 FR | 优先级 | 目标 |
 |---|---|---|---|---|
-| 1 | **CHAPTER 2 补齐（Harness 生产集成）**：真实 `run_task_once()`；通知真实送达（非仅日志）；审批流程真实流转（非固定 pending） | FR-030 / FR-031 / FR-032 | **P0** | CHAPTER 2 Gate PASS（SPAC §36） |
+| 1 | **CHAPTER 2 补齐（Harness 生产集成）**：真实 `run_task_once()`（含修正 test_host_swap 固化断言）；通知真实送达（非仅日志）；审批流程真实流转（非固定 pending） | FR-030 / FR-031 / FR-032 | **P0** | CHAPTER 2 Gate PASS（SPAC §36） |
 | 2 | **DSH Bridge 可移植配置**：移除 `/Users/...` 硬编码，接 `UA_ROOT / UA_PYTHON / UA_DATA_DIR / UA_CONFIG`，禁止 silent fallback | FR-033 | **P0** | 换机器零改代码 |
-| 3 | **生产凭据后端（macOS 优先）**：CredentialVault 接 OS Keychain（Security Framework），dev 混淆降级为兜底 | FR-191 | **P0**（安全） | 明文/混淆 key 不落盘 |
-| 4 | **第二 Flight Live Source**（Ctrip/Fliggy 优先，复用 Skyscanner SkillProtocol 模式，尊重 robots/合规） | FR-074（CH 4.2） | P1 | 双源交叉验证 |
-| 5 | **Hotel Live Source**（Booking/Ctrip 候选；HotelScanCoordinator 已就绪，接真实 adapter） | FR-082（CH 4.4） | P1 | Hotel 真实闭环 + 对照验证 |
+| 3 | **RULE-003 运行时接线（CH1 补齐）**：approvals/idempotency/dedup/observations/ks 全部切换到 SQLite RepositorySet（9 个 repo 装配进 `service.py`），JSON 仅保留 Export/Debug/Log | RULE-003 / CH1-1.1 | **P0** | 无第二可写真相 |
+| 4 | **多源 DoD 起步**：第二 Flight Live Source（Ctrip/Fliggy）+ Hotel Live Source | FR-074 / FR-082 | **P0**（DoD 多源） | Flight+Hotel 真实多源 |
+| 5 | **生产凭据后端（macOS 优先）**：CredentialVault 接 OS Keychain（Security Framework），dev 混淆降级为兜底 | FR-191 | **P0**（安全） | 明文/混淆 key 不落盘 |
 | 6 | **通用 Adapter 层落地**：HTTP Adapter + API Adapter + Browser Adapter（含深度、失败隔离） | FR-060 / FR-061 / FR-062 | P1 | CH 3.1/3.2/3.3 Gate |
 | 7 | **Jobs Live Source**（官方 Careers / LinkedIn / SEEK 之一，走 JobSkillProtocol） | FR-100 / FR-101 | P1 | CH 6.1 Gate |
 
