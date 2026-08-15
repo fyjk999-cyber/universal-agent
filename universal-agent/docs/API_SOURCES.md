@@ -8,8 +8,43 @@
 |---|---|---|---|
 | Skyscanner（浏览器抓取） | Flight Live | ✅ 已启用（`--live`） | 本机 Chrome + scrapling（既有） |
 | **Kiwi Tequila**（推荐） | Flight 价格 API | ✅ 适配器已实现（`adapters/kiwi/`） | 注册免费 key → `UA_KIWI_KEY` |
+| **12306 公开接口**（国内火车） | Railway 真实数据 | ✅ **已接入且实测出数据**（`adapters/railway/`，无 key） | 无需配置，直接可用 |
 | Ctrip HTTP（可配置端点） | Flight | ✅ 适配器已实现（`adapters/ctrip/`） | 提供 JSON 端点 → `UA_CTRIP_ENDPOINT` |
 | Booking HTTP（可配置端点） | Hotel | ✅ 适配器已实现（`adapters/booking/`） | 提供 JSON 端点 → `UA_BOOKING_ENDPOINT` |
+
+## ✅ 国内真实数据：12306（无 key，已实测）
+
+12306 公开匿名接口（`kyfw.12306.cn`）无需注册，直接可查国内火车**余票 + 时刻**：
+
+```bash
+# 直接可用（上海→杭州东，2026-08-20 实测 20 条精确车次记录）
+python -m universal_agent.apps.agent_cli --domain railway
+# → G7357 08:00→09:36 商务座 余票=H3 / 一等座 01 / 二等座 06 ...
+
+# 程序化使用
+from universal_agent.adapters.railway import Railway12306Skill
+skill = Railway12306Skill()
+items = skill.search({"from_city": "上海", "to_city": "杭州东", "date": "2026-08-20"})
+```
+
+- 实现：`adapters/railway/`（会话初始化 → 车站表 → queryG 余票/时刻；精确车站匹配；
+  票价端点 best-effort，限流时 fail-closed UNKNOWN）
+- 礼貌：每次查询间隔 1s；不做登录态/验证码绕过（SPAC §33）
+- 局限：票价端点（`leftTicketPrice`）对匿名请求限流严重，当前返回余票 + 时刻；
+  票价可后续用登录态或降低频率补全
+
+## 国内其它源的可抓性评估（2026-08-15 实测）
+
+| 源 | 实测 | 结论 |
+|---|---|---|
+| **航旅纵横（umetrip）** | 首页可达，但航班动态/行程需登录；无公开价格 API | 不合规抓取（登录态），不接入（SPAC §33） |
+| **去哪儿（qunar）** | `search.qunar.com` SSL 阻断；`flight.qunar.com/touch/api` 返回 HTML（反爬墙） | 反爬墙，不绕过（SPAC §33 非目标） |
+| **携程（ctrip）** | `flights.ctrip.com` 返回 432（风控） | 反爬墙，不绕过 |
+| **同程（ly.com）** | 首页 200，无公开价格 API | — |
+
+> 结论：国内**航班价格**没有公开免费 API（携程/去哪儿/飞常准/航旅纵横均为商业或登录制）；
+> 合规可接入的真实国内数据 = **12306（火车，无 key，已接入）** + 天巡中国站（Skyscanner 模式）。
+> 如需国内航班价格，合法路径是商业 API（如飞常准企业版）或用户自有账号数据。
 
 ## 推荐：Kiwi Tequila（航班价格，覆盖 SHA/PVG/HGH → ZQN）
 

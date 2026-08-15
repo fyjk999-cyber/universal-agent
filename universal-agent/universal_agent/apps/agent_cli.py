@@ -148,9 +148,25 @@ def _execute() -> None:
     print(f"  status={out.status}  detail={out.detail}")
 
 
+def _railway() -> None:
+    """12306 真实余票查询（无 key 公开接口）。"""
+    from universal_agent.adapters.railway import Railway12306Skill
+    skill = Railway12306Skill()
+    print("== 12306 实时余票（上海→杭州东）==")
+    items = skill.search({"from_city": "上海", "to_city": "杭州东",
+                          "date": "2026-08-20"})[:10]
+    if not items:
+        print("  暂无数据（12306 限流或不可达）")
+        return
+    for it in items:
+        print(f"  {it['train_no']} {it['depart_time']}→{it['arrive_time']} "
+              f"{it['seat_class']} 余票={it['available']}")
+
+
 async def _run(domain: str) -> None:
     handlers = {
         "flight": _flight, "hotel": _hotel, "jobs": _jobs,
+        "railway": lambda: _railway(),
         "bundle": lambda: _bundle(), "prepare": lambda: _prepare(),
         "execute": lambda: _execute(),
     }
