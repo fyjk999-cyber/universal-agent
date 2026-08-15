@@ -60,7 +60,7 @@ class Railway12306Skill(SkillProtocol):
                     "duration": t.get("duration", ""),
                     "seat_class": seat,
                     "available": avail,
-                    "available_label": self.client.availability_label(avail),
+                    "available_label": Railway12306Client.availability_label(avail),
                 })
         return out
 
