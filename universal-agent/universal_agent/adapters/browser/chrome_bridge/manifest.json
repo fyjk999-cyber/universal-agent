@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "Universal Agent Official Session Bridge",
+  "version": "0.1.0",
+  "description": "Opens allowlisted airline official pages from Universal Agent without accessing passwords, cookies, or payment data.",
+  "permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://et.airchina.com.cn/*",
+    "https://extra.csair.com/*",
+    "https://ffp.airchina.com.cn/*",
+    "https://skypearl.csair.com/*",
+    "https://www.9air.com/*",
+    "https://www.airchina.com.cn/*",
+    "https://www.airguilin.com/*",
+    "https://www.airhunanair.com/*",
+    "https://www.airjiangxi.com/*",
+    "https://www.airkunming.com/*",
+    "https://www.beijingair.com/*",
+    "https://www.cdal.com.cn/*",
+    "https://www.ceair.com/*",
+    "https://www.cgzair.com/*",
+    "https://www.ch.com/*",
+    "https://www.changan-air.com/*",
+    "https://www.chinaexpressair.com/*",
+    "https://www.csair.com/*",
+    "https://www.donghaiair.com/*",
+    "https://www.flycua.com/*",
+    "https://www.fuzhou-air.com/*",
+    "https://www.gxairlines.com/*",
+    "https://www.hainanairlines.com/*",
+    "https://www.hbhk.com.cn/*",
+    "https://www.jdair.net/*",
+    "https://www.joy-air.com/*",
+    "https://www.juneyaoair.com/*",
+    "https://www.longjiangairlines.com/*",
+    "https://www.loongair.cn/*",
+    "https://www.luckyair.net/*",
+    "https://www.okair.net/*",
+    "https://www.qdairlines.com/*",
+    "https://www.ruili.com/*",
+    "https://www.sda.cn/*",
+    "https://www.shenzhenair.com/*",
+    "https://www.sichuanair.com/*",
+    "https://www.suparnaairlines.com/*",
+    "https://www.tianjiaoair.com/*",
+    "https://www.tianjin-air.com/*",
+    "https://www.tibetairlines.com.cn/*",
+    "https://www.urumqi-air.com/*",
+    "https://www.westair.cn/*",
+    "https://www.xiamenair.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Universal Agent Session Bridge",
+    "default_popup": "popup.html"
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://127.0.0.1:8632/*"
+    ]
+  }
+}

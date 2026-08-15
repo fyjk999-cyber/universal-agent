@@ -88,7 +88,9 @@
 | **IdentityVault / SessionBroker 空占位** | FR-193 / FR-194 | 身份与会话独立管理缺失 |
 | **无 Decision 层 / supporting_evidence**：core/decision/ 空目录，Decision 无证据引用 | FR-132 / RULE-006 | 决策不可审计反查 |
 | **无 why_this_bundle**：Bundle 结果无解释字段 | FR-092 | 推荐不可解释 |
-| **HTTP/API/Browser/Mobile Adapter 全为空目录** | FR-060~063 | 通用接入层缺失（CH3 = PARTIAL） |
+| **HTTP/API/Browser/Mobile Adapter 全为空目录** | FR-060~063 | 通用接入层缺失（CH3 = PARTIAL）；注：P0 收敛后 Browser 官方会话桥蓝图已落地（见下方"✅ 已解决"外的 PARTIAL 说明） |
+| **Aviationstack 免费档限制**：未来日期排班可能不在权限内；`flight_iata` 模糊匹配（已用精确匹配过滤） | — | 看板状态列对远期航班可能显示"无记录"（如实显示，不伪造） |
+| **Browser 会话桥未接真实 Chrome**：服务端审批闸门 + MV3 扩展就绪，但扩展需用户手动安装后才可打开官方页面 | FR-062 | 人机协同登录态链路待人工安装后联调 |
 | **通知事件类型缺失**：events/types.py 缺 PRICE_DROP/WATCH_FAILED/ACTION_RESULT 等 | FR-164 | 通知事件分类不全 |
 | **KillSwitch 未覆盖 L0/L1 gateway 与 ActionPreparer** | FR-180 | 杀开关覆盖不全 |
 | **机会评分缺 Time Remaining / Preference / Source Health 维度** | FR-140/141/142 | OpportunityScore 不完整 |

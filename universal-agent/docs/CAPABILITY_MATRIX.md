@@ -51,7 +51,8 @@
 | Capability | Status | Implementation | Tests | Known Limitations | Next Action |
 |---|---|---|---|---|---|
 | Flight（FR-070~073） | IMPLEMENTED | `domains/flight/` normalize + knowledge(strong/weak entity) + scoring + rank_eligibility | test_flight_normalize/scoring + test_p09_eligibility/entity（30+） | PARTIAL 不进 Final Top5（合规） | — |
-| Flight 多源（FR-074） | **PARTIAL** | 仅 Skyscanner Live；Ctrip/Fliggy/Tongcheng 无 adapter | test_skyscanner_adapter（17） | 单源无交叉验证（P1） | CH 4.2/4.3 |
+| Flight 中文城市→IATA + 航司名录（借自本地机票 OS） | IMPLEMENTED | `domains/flight/airports.py`（29 机场别名 + 46 航司名录 + resolve_airport/airline_info/official_airline_hosts） | test_flight_airports（11 项） | 别名表为常用机场子集（非全量 IATA） | 可扩展全量表 |
+| Flight 多源（FR-074） | **PARTIAL** | Kiwi（真实价格，管线已通）+ Skyscanner Live + Ctrip HTTP（结构就绪）；仅 Kiwi 为真实 API | test_kiwi_source + test_ch4_multi_source | Kiwi 需用户 key（P1） | 用户注册 key 后联调 |
 | Hotel（FR-080~082） | **PARTIAL** | `domains/hotel/` + HotelPolicy（breakfast/cancellation/tax/occupancy）+ HotelScanCoordinator | test_hotel + test_p9_hotel | 无真实 Live 源（仅 replay）（P1） | CH 4.4 |
 | Travel Bundle（FR-090~092） | IMPLEMENTED | `core/bundling/` + `domains/travel/` 总效用非贪心 + why_this_bundle | test_bundle + test_e_travel_bundle | — | — |
 | Jobs（FR-100~104） | **PARTIAL** | `domains/jobs/` + JobSkillProtocol + human-only + Answer Memory | test_p13_careerpilot + test_f_jobs | 无 Live 源（P1）；Application State 未实现（P2） | CH 6 |
@@ -68,9 +69,11 @@
 | FX 汇率 | IMPLEMENTED | `adapters/fx/service.py`（缓存+兜底） | 3 | 兜底表可能过时 | — |
 | HTTP Adapter（FR-060，CH4） | IMPLEMENTED | `adapters/http/adapter.py`（超时/重试/失败隔离） | test_ch4（全链路） | — | — |
 | Ctrip Flight 第二源（FR-074） | IMPLEMENTED（结构+测试） | `adapters/ctrip/` CtripFlightSkill（SkillProtocol + HTTP JSON + fail-closed + 健康检查） | test_ch4_multi_source | 真实端点待联调（UA_CTRIP_ENDPOINT） | CH4 联调 |
-| Kiwi Tequila 真实价格源（FR-074） | IMPLEMENTED（管线已通） | `adapters/kiwi/` KiwiTequilaFlightSkill（真实 API；本机实测 401/403 认证语义正确，只差 key） | test_kiwi_source（5 项，含真实端点管线） | 需用户注册 UA_KIWI_KEY（partners.kiwi.com） | 用户注册 key 后联调 |
+| Kiwi Tequila 真实价格源（FR-074） | IMPLEMENTED（管线已通） | `adapters/kiwi/` KiwiTequilaFlightSkill（真实 API；本机实测 401/403 认证语义正确，只差 key；中文城市自动解析为 IATA） | test_kiwi_source（5 项，含真实端点管线） | 需用户注册 UA_KIWI_KEY（partners.kiwi.com） | 用户注册 key 后联调 |
+| Aviationstack 实时状态源 | IMPLEMENTED（本机 key 已实测出数据） | `adapters/aviationstack/`（SkillProtocol + 精确匹配优先 + 状态中文化；运营数据非票价） | test_aviationstack_source（7 项，有 key 时含真实端点） | 免费档未来排班受限；模糊匹配已用精确过滤 | 看板状态列已接 |
 | Booking Hotel 源（FR-082） | IMPLEMENTED（结构+测试） | `adapters/booking/` BookingHotelSkill | test_ch4（hotel） | 真实端点待联调（UA_BOOKING_ENDPOINT） | CH4 联调 |
-| API / Browser Adapter（FR-061/062） | **EMPTY** | `adapters/api/`、`adapters/browser/` 仅 `__init__.py`（已核实） | 0 | 未实现（P1） | CH 3.2/3.3 |
+| API Adapter（FR-061） | **EMPTY** | `adapters/api/` 仅 `__init__.py`（已核实） | 0 | 未实现（P1） | CH 3.2 |
+| Browser 官方会话桥（FR-062，蓝图落地） | **PARTIAL（蓝图+服务端闸门已实现）** | `adapters/browser/bridge.py`（白名单默认拒绝 + PENDING→审批 + 审计）；`chrome_bridge/` MV3 扩展（由 `scripts/gen_chrome_bridge.py` 从航司名录生成，43 白名单域名） | test_browser_bridge（13 项） | 扩展需用户手动安装；未接真实 Chrome（P1 剩余） | 装扩展后联调 |
 | Mobile Adapter（FR-063） | **EMPTY** | `adapters/mobile/` 仅 `__init__.py`（已核实） | 0 | 连 Protocol 都未定义（P2） | CH 3.4 |
 | Tier3 官方源 | SKELETON | `adapters/official/registry.py`（注册器+健康检查） | 4 | 无真实航司适配器（合规） | v1.3 |
 | Failure Isolation（FR-064） | IMPLEMENTED | 多 query 并发 + 单源失败隔离 | test_i_failure_injection | — | — |
@@ -138,10 +141,11 @@
 
 ---
 
-## 总结（2026-08-15，P23 P0 收敛后）
+## 总结（2026-08-15，P23 P0 收敛后 + 机票 OS 资产移植）
 
-- **IMPLEMENTED**: 约 50 项（P23 新增：run_task_once 真实执行、通知持久化+sink、审批真实流转、Bridge 可移植配置、RepositorySet 全量接线、3 个 SQLite Kv 后端）
-- **PARTIAL**: 约 10 项 — 多源 DoD、Reliable Events 组件消费、通用 Adapter、新域 Live、Notification 分级、生产凭据后端、Decision 层、Jobs Live、Skyscanner 详情页
-- **EMPTY**: 8 项 — adapters/{http,api,browser,mobile}、security/{identity_vault,session_broker}、core/decision/、core/constraints/
+- **IMPLEMENTED**: 约 53 项（新增：中文城市→IATA 解析 + 航司名录、Aviationstack 实时状态源、
+  Browser 官方会话桥服务端闸门 + MV3 扩展、看板 Flight 面板）
+- **PARTIAL**: 约 11 项 — 多源 DoD、Reliable Events 组件消费、通用 Adapter、新域 Live、Notification 分级、生产凭据后端、Decision 层、Jobs Live、Skyscanner 详情页、Browser 会话桥真实 Chrome 联调
+- **EMPTY**: 6 项 — adapters/{http→已实现,api,mobile}、security/{identity_vault,session_broker}、core/decision/、core/constraints/
 - **BROKEN**: 0 项
-- 关键结论：**P0×6 中 5 项已修复（FR-030~033 + RULE-003）**，剩余 P0 为多源 DoD（CH4）；P1×15 中若干已随修复部分消解；完整状态以 `MISSING_FEATURE_REPORT.md` 为准（**532 tests / 0 failed**）
+- 关键结论：**P0×6 中 5 项已修复（FR-030~033 + RULE-003）**，剩余 P0 为多源 DoD（CH4）；完整状态以 `MISSING_FEATURE_REPORT.md` 为准（**596 tests / 0 failed**）

@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from ...core.contracts import RawLeg, RawListing, RawSegment
 from ...coordinator.query_planner import FlightQuery
+from ...domains.flight.airports import resolve_airport
 from ...registry.skills import SkillProtocol
 from ..http import HttpAdapter, HttpAdapterError
 from ..ctrip.adapter import SkillUnavailable
@@ -50,8 +51,10 @@ class KiwiTequilaFlightSkill(SkillProtocol):
         if not self.api_key:
             raise SkillUnavailable(
                 f"{ENV_KEY} 未配置（partners.kiwi.com 注册免费 key）；Source 显式 AUTH_REQUIRED")
+        origin = _resolve_iata(query.get("origin"), "origin")
+        destination = _resolve_iata(query.get("destination"), "destination")
         params = {
-            "fly_from": query.get("origin"), "fly_to": query.get("destination"),
+            "fly_from": origin, "fly_to": destination,
             "date_from": _tequila_date(query.get("depart_date")),
             "date_to": _tequila_date(query.get("depart_date")),
             "return_from": _tequila_date(query.get("return_date")),
@@ -156,6 +159,20 @@ def _tequila_date(iso: str) -> str:
         return f"{d}/{m}/{y}"
     except ValueError:
         return iso
+
+
+def _resolve_iata(value: Any, label: str) -> str:
+    """中文城市 / 机场名 / IATA → IATA 三字码；无法识别 fail-closed 抛异常。
+
+    明确失败优于猜测（RULE-009）：Kiwi 端点对非法 fly_from 返回 400 级错误，
+    与其让上游拿到含糊失败，不如在这里显式给出可读原因。
+    """
+    iata = resolve_airport(value)
+    if not iata:
+        raise SkillUnavailable(
+            f"无法识别{label}「{value}」（支持 IATA 三字码或常用中文城市名，"
+            f"如 上海→PVG / 东京→NRT）；fail-closed 拒绝查询")
+    return iata
 
 
 def _leg_date(departure: Any) -> str:

@@ -34,6 +34,7 @@ HTML_FILE = Path(__file__).resolve().parent / "dashboard.html"
 
 CACHE_TTL = 60  # 秒；12306 查询间隔 >1s，避免限流
 DEFAULT_QUERY = {"from": "上海", "to": "杭州东", "date": "2026-08-20"}
+DEFAULT_FLIGHT_QUERY = {"from": "上海", "to": "东京", "date": "2026-08-30"}
 
 
 class ScanCache:
@@ -45,6 +46,8 @@ class ScanCache:
         self._lock = threading.Lock()
         self._railway: Dict[str, Any] = {}
         self._railway_at: float = 0.0
+        self._flight: Dict[str, Any] = {}
+        self._flight_at: float = 0.0
         self._last_error: str = ""
 
     def railway(self, query: Dict[str, str] | None = None,
@@ -115,6 +118,116 @@ class ScanCache:
             {"train_no": r["train_no"], "seat_class": r["seat_class"],
              "available": r["available"], "score": r["score"],
              "created_at": r["created_at"]} for r in rows]}
+
+    # ------------------------------------------------------------------ flight
+    def flight(self, query: Dict[str, str] | None = None,
+               force: bool = False) -> Dict[str, Any]:
+        """Kiwi 真实票价单程搜索（60s 缓存；中文城市自动解析为 IATA）。"""
+        q = {k: (query or {}).get(k) or v for k, v in DEFAULT_FLIGHT_QUERY.items()}
+        now = time.time()
+        with self._lock:
+            fresh = (self._flight.get("query") == q
+                     and (now - self._flight_at) <= CACHE_TTL)
+            if fresh and not force:
+                return self._flight
+            self._flight_at = now
+        try:
+            result = self._scan_flight(q)
+            with self._lock:
+                self._flight = result
+                self._last_error = ""
+        except Exception as exc:  # noqa: BLE001
+            log.warning("flight scan failed: %s", exc)
+            with self._lock:
+                self._last_error = str(exc)
+            result = self._flight
+        return result
+
+    @staticmethod
+    def _scan_flight(q: Dict[str, str]) -> Dict[str, Any]:
+        import asyncio
+
+        from universal_agent.adapters.kiwi import (
+            KiwiTequilaFlightSkill, kiwi_marketplace_manifest)
+        from universal_agent.core.contracts import TaskSpec, TaskType
+        from universal_agent.coordinator.scanner import ShadowScanCoordinator
+        from universal_agent.events import InProcessEventBus
+        from universal_agent.registry import SkillRegistry
+
+        skill = KiwiTequilaFlightSkill()
+        health = skill.health_check()
+        reg = SkillRegistry()
+        reg.register_marketplace(kiwi_marketplace_manifest().model_copy(
+            update={"health": health["status"].lower()
+                    if health["status"] == "HEALTHY" else "DEGRADED"}))
+        delivered: list = []
+
+        async def _run() -> Dict[str, Any]:
+            coord = ShadowScanCoordinator(
+                bus=InProcessEventBus(), registry=reg,
+                fetchers={"kiwi_tequila": skill.fetch},
+                notifier=delivered.append)
+            task = TaskSpec(id="flight-watch-dashboard", type=TaskType.WATCH,
+                            domain="flight",
+                            search_space={
+                                "origin": [q["from"]],
+                                "destination": [q["to"]],
+                                "departure": {"start": q["date"], "end": q["date"]}})
+            out = await coord.scan(task)
+            # 每 listing 附航司名录信息（中文名 + 官方购票链接）
+            from universal_agent.domains.flight.airports import (
+                airline_booking_url, airline_info)
+            listings = []
+            for listing in out.raw_listings:
+                seg0 = listing.outbound.segments[0] if listing.outbound.segments else None
+                airline = seg0.airline if seg0 else ""
+                info = airline_info(airline)
+                listings.append({
+                    "flight_no": f"{seg0.airline}{seg0.flight_no}" if seg0 else "?",
+                    "airline": info["name_zh"] if info else airline,
+                    "airline_iata": airline,
+                    "origin": listing.origin_airport,
+                    "dest": listing.dest_airport,
+                    "depart_date": listing.depart_date,
+                    "stops": listing.outbound.stops,
+                    "price": listing.price_cny,
+                    "currency": listing.currency,
+                    "url": listing.url,
+                    "booking_url": airline_booking_url(airline),
+                })
+            listings.sort(key=lambda r: r["price"])
+            return {
+                "source_health": health,
+                "query": q,
+                "raw_count": len(out.raw_listings),
+                "candidate_count": len(out.candidates),
+                "listings": listings[:10],
+                "notified": out.notified,
+                "events": out.emitted_events,
+            }
+
+        return asyncio.run(_run())
+
+    @staticmethod
+    def flight_status(flight: str, date: str = "") -> Dict[str, Any]:
+        """Aviationstack 实时状态（fail-closed；无 key / 查不到如实返回）。"""
+        from universal_agent.adapters.aviationstack import (
+            AviationstackFlightStatusSkill)
+        return AviationstackFlightStatusSkill().live_status(flight, date)
+
+    @staticmethod
+    def flight_airports(q: str = "") -> Dict[str, Any]:
+        """中文城市/机场/IATA 搜索（看板 datalist）。"""
+        from universal_agent.domains.flight.airports import (
+            AIRPORT_ALIASES, AIRPORT_NAMES_ZH)
+        term = (q or "").strip().lower()
+        out = []
+        for alias, iata in sorted(AIRPORT_ALIASES.items()):
+            if term and term not in alias and term not in iata.lower():
+                continue
+            out.append({"alias": alias, "iata": iata,
+                        "name_zh": AIRPORT_NAMES_ZH.get(iata, "")})
+        return {"airports": out[:60], "total": len(out)}
 
     @staticmethod
     def _scan_railway(q: Dict[str, str]) -> Dict[str, Any]:
@@ -228,12 +341,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(CACHE.railway(params, force=params.pop("refresh", False)))
         elif path == "/api/railway/history":
             self._json(CACHE.history(params))
+        elif path == "/api/flight":
+            self._json(CACHE.flight(params, force=params.pop("refresh", False)))
+        elif path == "/api/flight/status":
+            self._json(CACHE.flight_status(params.get("flight", ""),
+                                           params.get("date", "")))
+        elif path == "/api/flight/airports":
+            self._json(CACHE.flight_airports(params.get("q", "")))
         elif path == "/api/sources":
             self._json(self._sources())
         elif path == "/api/pipeline":
             self._json(PIPELINE)
         elif path == "/api/stations":
             self._json(self._stations())
+        elif path == "/api/browser":
+            self._json(self._browser())
         else:
             self._json({"error": "not found"}, 404)
 
@@ -277,6 +399,10 @@ class Handler(BaseHTTPRequestHandler):
         import os as _os
         from universal_agent.adapters.kiwi import KiwiTequilaFlightSkill
         statuses["kiwi_tequila"] = KiwiTequilaFlightSkill().health_check()
+        # Aviationstack 实时状态（借自本地机票 OS 的 key 可复用）
+        from universal_agent.adapters.aviationstack import (
+            AviationstackFlightStatusSkill)
+        statuses["aviationstack"] = AviationstackFlightStatusSkill().health_check()
         statuses["ctrip_http"] = {
             "status": "UNAVAILABLE" if not _os.environ.get("UA_CTRIP_ENDPOINT")
             else "CONFIGURED",
@@ -288,6 +414,16 @@ class Handler(BaseHTTPRequestHandler):
             "reason": "UA_BOOKING_ENDPOINT 未配置" if not _os.environ.get("UA_BOOKING_ENDPOINT")
             else "已配置端点"}
         return {"sources": statuses}
+
+    @staticmethod
+    def _browser() -> Dict[str, Any]:
+        """官方会话桥状态（白名单默认拒绝；仅展示，不做自动打开）。"""
+        from universal_agent.adapters.browser.bridge import BrowserSessionBridge
+        bridge = BrowserSessionBridge()
+        return {"bridge": bridge.status(),
+                "allowed_hosts": bridge.allowed_hosts_list()[:20],
+                "note": "扩展位于 adapters/browser/chrome_bridge/；"
+                        "每次打开官方页面需用户在界面显式批准（RULE-007）"}
 
 
 #: SPAC 完整工作循环（看板流转示意）

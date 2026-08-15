@@ -1,6 +1,6 @@
 # API 数据源接入指南（CH4 多源 · 真实数据）
 
-> 更新：2026-08-15 · 目标：让多源管线接上**真实**航班/酒店价格数据（不再只用 replay fixture）。
+> 更新：2026-08-15（v2：新增 Aviationstack 实时状态 + 借自本地"机票 OS"的中文城市解析/航司名录）
 
 ## 当前可用的真实源
 
@@ -9,6 +9,7 @@
 | Skyscanner（浏览器抓取） | Flight Live | ✅ 已启用（`--live`） | 本机 Chrome + scrapling（既有） |
 | **Kiwi Tequila**（推荐） | Flight 价格 API | ✅ 适配器已实现（`adapters/kiwi/`） | 注册免费 key → `UA_KIWI_KEY` |
 | **12306 公开接口**（国内火车） | Railway 真实数据 | ✅ **已接入且实测出数据**（`adapters/railway/`，无 key） | 无需配置，直接可用 |
+| **Aviationstack**（实时状态） | Flight 运营数据 | ✅ 适配器已实现（`adapters/aviationstack/`） | 注册免费 key → `UA_AVIATIONSTACK_KEY`（本机已有，可复用） |
 | Ctrip HTTP（可配置端点） | Flight | ✅ 适配器已实现（`adapters/ctrip/`） | 提供 JSON 端点 → `UA_CTRIP_ENDPOINT` |
 | Booking HTTP（可配置端点） | Hotel | ✅ 适配器已实现（`adapters/booking/`） | 提供 JSON 端点 → `UA_BOOKING_ENDPOINT` |
 
@@ -94,6 +95,38 @@ Amadeus 自助开发者门户**正在关停**（[phocuswire 报道](https://www.
 且本机实测 `api.amadeus.com` / `test.api.amadeus.com` DNS 不可达。
 新项目不建议依赖。
 
+## ✅ Aviationstack 实时航班状态（运营数据，非票价）
+
+2026-08-15 实测（本机 key 有效）：`api.aviationstack.com` 可达，
+按航班号 + 日期返回实时状态 / 航站楼 / 登机口 / 延误 / 预计与实际起降时间。
+
+```bash
+export UA_AVIATIONSTACK_KEY="你的 key"   # 本机旧项目 .env 已有可用 key
+python -m universal_agent.apps.dashboard --port 8632
+# 看板 Flight 面板"实时状态"列即显示（CA123 → PEK T3）
+```
+
+- 实现：`adapters/aviationstack/`（SkillProtocol：search/detail/verify/availability/
+  prepare_action/health_check；无 execute）
+- 边界（诚实标注，§33 不混淆）：**运营状态不是可售票价/舱位**；
+  免费档 `flight_iata` 为模糊匹配 → 代码内**精确匹配优先**（CA123 不取 SC123）；
+  查不到/无 key → 显式 `AUTH_REQUIRED` / `found=False`（RULE-009）
+- 局限：免费档未来日期排班可能不在权限内（如实显示"无记录"，不伪造）
+
+## ✅ 借自本地"机票 OS"的知识资产（2026-08-15 移植）
+
+来源：`/Users/huhongjie/Documents/Codex/2026-07-23/referenced-chatgpt-conversation-this-is-untrusted-2/`
+（旅程智选 Travel Reward Optimizer，2026-07 本地项目，用户授权借鉴）。
+
+| 资产 | 落位 | 说明 |
+|---|---|---|
+| 中文城市→机场 IATA 别名表（29 机场） | `domains/flight/airports.py` | "上海"→PVG、"东京"→NRT；Kiwi/看板直接支持中文输入 |
+| 中国航司名录（46 家，民航局） | `domains/flight/airports.py` | 航司中文名 + 官方购票 URL；看板"官网核价"链接 |
+| Aviationstack 接入经验 + 复用 key | `adapters/aviationstack/` | 见上节 |
+| Chrome 会话桥 MV3 扩展（白名单默认拒绝） | `adapters/browser/chrome_bridge/`（由 `scripts/gen_chrome_bridge.py` 从航司名录生成） | 人机协同打开官方页面；不碰 Cookie/密码/支付（FR-060-062 蓝图） |
+
+不借鉴：原项目"演示票价 fallback"（模拟数据冒充真实，违反 RULE-009/SPAC §56）。
+
 ## 自行接入任意 JSON 端点（Ctrip/Booking 模式）
 
 若你有任何返回 JSON 的航班/酒店数据端点（自建、第三方、或商业 API），
@@ -113,6 +146,10 @@ export UA_BOOKING_ENDPOINT=https://你的端点/hotels
 ```bash
 cd universal-agent
 ../.venv/bin/python -m pytest tests/integration/test_kiwi_source.py -q   # Kiwi 5 项
+../.venv/bin/python -m pytest tests/integration/test_aviationstack_source.py -q  # 状态源 7 项（有 key 时含真实端点）
+../.venv/bin/python -m pytest tests/unit/test_flight_airports.py -q      # 中文解析+航司名录 11 项
+../.venv/bin/python -m pytest tests/unit/test_browser_bridge.py -q       # 会话桥白名单/审批 13 项
+../.venv/bin/python -m pytest tests/integration/test_dashboard_flight.py -q  # 看板端点 6 项
 ../.venv/bin/python -m pytest tests/integration/test_ch4_multi_source.py -q  # 多源 5 项
 ../.venv/bin/python -m universal_agent.apps.agent_cli --health
 ```

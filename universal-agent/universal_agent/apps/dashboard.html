@@ -65,7 +65,7 @@
 <body>
 <header>
   <h1>Universal Persistent Watch &amp; Decision</h1>
-  <span class="sub">Universal Agent 可视化看板 · Railway(12306) 真实数据</span>
+  <span class="sub">Universal Agent 可视化看板 · Railway(12306) + Flight(Kiwi/Aviationstack) 真实数据</span>
   <span id="healthPill" class="pill warn">检测中…</span>
   <button id="refreshBtn" onclick="doRefresh()" style="margin-left:auto;
     background:var(--panel2); color:var(--text); border:1px solid var(--blue);
@@ -111,6 +111,25 @@
     </div>
 
     <div class="panel">
+      <h2>✈️ Flight 实时票价 <span id="flightMeta" class="tag"></span></h2>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <input id="fFrom" list="airports" placeholder="出发城市（如 上海）" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
+        <span style="color:var(--muted)">→</span>
+        <input id="fTo" list="airports" placeholder="到达城市（如 东京）" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
+        <input id="fDate" type="date" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel2); color:var(--text);">
+        <button onclick="switchFlight()" style="background:var(--blue); color:#0d1117;
+          border:none; border-radius:6px; padding:8px 18px; cursor:pointer; font-weight:700;">查询</button>
+        <datalist id="airports"></datalist>
+      </div>
+      <div id="flightTable"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+        票价来源：Kiwi Tequila 真实 API（需 <b>UA_KIWI_KEY</b>，未配置时显式 AUTH_REQUIRED）<br>
+        状态来源：Aviationstack 实时航班动态（需 <b>UA_AVIATIONSTACK_KEY</b>，运营数据非票价）；
+        中文城市自动解析为机场 IATA（如 上海→PVG）
+      </div>
+    </div>
+
+    <div class="panel">
       <h2>⚙️ 事件流（本次 Scan 触发的事件）</h2>
       <div id="events"></div>
     </div>
@@ -122,13 +141,17 @@
       <div id="sources"></div>
     </div>
     <div class="panel">
+      <h2>🛡️ 官方会话桥（Browser）</h2>
+      <div id="browserBridge"></div>
+    </div>
+    <div class="panel">
       <h2>🧠 SPAC 工作循环</h2>
       <div id="cycle"></div>
     </div>
   </div>
 </div>
 
-<div class="foot">Universal Agent · SPAC.md 驱动 · 数据来自 12306 公开接口（无 key）· 刷新间隔 60s</div>
+<div class="foot">Universal Agent · SPAC.md 驱动 · Railway 来自 12306 公开接口（无 key）· Flight 来自 Kiwi Tequila + Aviationstack（需 key）· 刷新间隔 60s</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -229,6 +252,105 @@ function renderSources(s) {
       <span class="pill ${cls}">${esc(h.status)}</span>
     </div>`;
   }).join('');
+}
+
+function renderBrowser(b) {
+  const el = $('browserBridge');
+  if (!el) return;
+  if (!b || !b.bridge) { el.innerHTML = '<div class="empty">不可用</div>'; return; }
+  el.innerHTML = `<div class="src">
+    <div><div class="name">白名单官方域名</div>
+    <div class="reason">${b.bridge.allowed_host_count} 个 · 默认拒绝（RULE-007），每次打开需你批准</div></div>
+    <span class="pill ok">${b.bridge.pending} 待批</span>
+  </div>
+  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-top:4px;">
+    安装扩展：<code style="color:var(--blue)">adapters/browser/chrome_bridge/</code>（Chrome 开发者模式加载）。
+    示例域名：${(b.allowed_hosts || []).slice(0, 5).join(' · ')}…
+  </div>`;
+}
+
+// ------------------------------------------------------------------ Flight 面板
+let flightQuery = {};
+
+async function loadAirports() {
+  try {
+    const a = await getJSON('/api/flight/airports');
+    $('airports').innerHTML = (a.airports || []).map(x =>
+      `<option value="${esc(x.alias)}">${esc(x.name_zh)} ${esc(x.iata)}</option>`).join('');
+  } catch (e) { /* 忽略 */ }
+}
+
+async function fillFlightStatus(rows) {
+  // 对每个航班号尽力查询实时状态（独立请求，失败静默保留占位）
+  for (const [i, r] of rows.entries()) {
+    if (i >= 5) break;
+    const cell = document.getElementById('fs-' + esc(r.flight_no).replace(/[^A-Za-z0-9]/g, ''));
+    if (!cell) continue;
+    try {
+      const s = await getJSON('/api/flight/status?flight=' + encodeURIComponent(r.flight_no)
+        + '&date=' + encodeURIComponent(r.depart_date));
+      if (s && s.found) {
+        const d = s.departure || {};
+        cell.innerHTML = `<span class="avail ${s.status === 'cancelled' ? 'no' : 'yes'}">${esc(s.status_zh)}</span>
+          <span class="sub">${esc(d.iata || '')}${esc(d.terminal ? ' T' + d.terminal : '')}${esc(d.gate ? ' ' + d.gate : '')}</span>`;
+      } else {
+        cell.innerHTML = '<span class="sub">无记录</span>';
+      }
+    } catch (e) { cell.innerHTML = '<span class="sub">—</span>'; }
+  }
+}
+
+function renderFlight(d) {
+  const el = $('flightTable');
+  if (!d || !d.listings) { el.innerHTML = '<div class="empty">加载中…</div>'; return; }
+  const health = d.source_health || {};
+  const note = health.status === 'HEALTHY'
+    ? '' : `<div class="empty">⚠ ${esc(health.reason || health.status)}</div>`;
+  $('flightMeta').textContent =
+    `raw=${d.raw_count} candidates=${d.candidate_count} · ${esc(d.query.from)}→${esc(d.query.to)} ${esc(d.query.date)}`;
+  if (!d.listings.length) {
+    el.innerHTML = note + '<div class="empty">暂无航班数据（无 key 或该航线/日期无结果）</div>';
+    return;
+  }
+  const rows = d.listings.map((r, i) => {
+    const fid = 'fs-' + esc(r.flight_no).replace(/[^A-Za-z0-9]/g, '');
+    const booking = r.booking_url
+      ? `<a href="${esc(r.booking_url)}" target="_blank" rel="noopener" style="color:var(--blue);">官网核价 ↗</a>`
+      : '<span class="sub">—</span>';
+    const link = r.url
+      ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--blue);">Kiwi ↗</a>`
+      : '';
+    return `<tr>
+      <td>${i+1}</td>
+      <td><b>${esc(r.flight_no)}</b></td>
+      <td>${esc(r.airline)}</td>
+      <td>${esc(r.origin)} → ${esc(r.dest)}</td>
+      <td>${r.stops === 0 ? '直飞' : r.stops + ' 转'}</td>
+      <td><b>¥${Number(r.price).toLocaleString()}</b></td>
+      <td id="${fid}"><span class="sub">查询中…</span></td>
+      <td>${booking} ${link}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = note + `<table><thead><tr>
+      <th>#</th><th>航班</th><th>航司</th><th>航线</th><th>转机</th><th>票价</th><th>实时状态</th><th>核价</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+  fillFlightStatus(d.listings);
+}
+
+async function switchFlight() {
+  const from = $('fFrom').value.trim();
+  const to = $('fTo').value.trim();
+  const date = $('fDate').value;
+  if (!from || !to || !date) { alert('请填写出发城市 / 到达城市 / 日期'); return; }
+  flightQuery = {from, to, date};
+  $('countdown').textContent = '航班查询中…';
+  try {
+    const qs = new URLSearchParams({...flightQuery, refresh: '1'}).toString();
+    const d = await getJSON('/api/flight?' + qs);
+    renderFlight(d);
+  } catch (e) {
+    $('flightTable').innerHTML = '<div class="empty">航班查询失败</div>';
+  }
 }
 
 function renderCycle(cycle) {
@@ -384,13 +506,17 @@ async function renderHistory() {
 async function refresh() {
   try {
     const qs = new URLSearchParams(currentQuery).toString();
-    const [health, rail, sources, pipe] = await Promise.all([
+    const fqs = new URLSearchParams(flightQuery).toString();
+    const [health, rail, sources, pipe, flight, browser] = await Promise.all([
       getJSON('/api/health'), getJSON('/api/railway?' + qs),
-      getJSON('/api/sources'), getJSON('/api/pipeline')]);
+      getJSON('/api/sources'), getJSON('/api/pipeline'),
+      getJSON('/api/flight?' + fqs), getJSON('/api/browser')]);
     renderHealth(health);
     renderRailway(rail);
     renderSources(sources);
     renderCycle(pipe.cycle);
+    renderFlight(flight);
+    renderBrowser(browser);
     renderHistory();
     t = 60;
   } catch (e) {
@@ -401,9 +527,12 @@ async function refresh() {
 
 async function doRefresh() {
   const qs = new URLSearchParams({...currentQuery, refresh: '1'}).toString();
+  const fqs = new URLSearchParams({...flightQuery, refresh: '1'}).toString();
   try {
-    const rail = await getJSON('/api/railway?' + qs);
+    const [rail, flight] = await Promise.all([
+      getJSON('/api/railway?' + qs), getJSON('/api/flight?' + fqs)]);
     renderRailway(rail);
+    renderFlight(flight);
     t = 60;
   } catch (e) { /* 下次定时刷新兜底 */ }
 }
@@ -426,7 +555,7 @@ async function switchQuery() {
   }
 }
 
-// 初始化：默认日期 + 车站列表
+// 初始化：默认日期 + 车站/机场列表
 (function init() {
   const d = new Date();
   d.setDate(d.getDate() + 15);  // 12306 预售期内
@@ -434,7 +563,14 @@ async function switchQuery() {
   $('qFrom').value = '上海';
   $('qTo').value = '杭州东';
   currentQuery = {from: '上海', to: '杭州东', date: $('qDate').value};
+  const fd = new Date();
+  fd.setDate(fd.getDate() + 30);
+  $('fDate').value = fd.toISOString().slice(0, 10);
+  $('fFrom').value = '上海';
+  $('fTo').value = '东京';
+  flightQuery = {from: '上海', to: '东京', date: $('fDate').value};
   loadStations();
+  loadAirports();
   renderFavs();
 })();
 
