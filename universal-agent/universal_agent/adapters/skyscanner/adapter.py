@@ -27,6 +27,7 @@ from universal_agent.core.contracts import (
     field_completeness_score,
     new_id,
 )
+from universal_agent.registry.skills.protocol import SkillProtocol
 
 log = logging.getLogger("ua.adapters.skyscanner")
 
@@ -137,12 +138,15 @@ def _parse_duration(text: str) -> int:
     return 0
 
 
-class SkyscannerAdapter:
+class SkyscannerAdapter(SkillProtocol):
     """Fetches + parses Skyscanner results into RawListing (browser-rendered).
 
     浏览器依赖懒加载：仅当真实抓取时才初始化 StealthyFetcher，测试与
     离线回放不触碰它。
     """
+
+    skill_id: str = "skyscanner.flight"
+    domains: List[str] = ["flight"]
 
     def __init__(self, config: Optional[SkyscannerConfig] = None,
                  rates: Optional[Dict[str, float]] = None) -> None:
@@ -150,6 +154,48 @@ class SkyscannerAdapter:
         self._fetcher = None
         #: 汇率 {币种: 1 CNY 可兑外币数}；缺省用兜底表
         self.rates = rates or {}
+
+    # -- SkillProtocol（P8）--
+    def search(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """SkillProtocol.search：查询 → RawListing dict 列表（fail-closed）。"""
+        from universal_agent.coordinator.query_planner import FlightQuery
+        try:
+            q = FlightQuery(
+                origin=query["origin"],
+                destination=query.get("dest") or query.get("destination", ""),
+                depart_date=query.get("depart_date") or query.get("ddate", ""),
+                return_date=query.get("return_date") or query.get("rdate", ""),
+                nights=int(query.get("nights", 7)),
+            )
+            listings = self.fetch(q)
+        except (KeyError, TypeError, ValueError) as exc:
+            log.warning("skyscanner search invalid query: %s", exc)
+            return []
+        except SourceUnavailable as exc:
+            log.warning("skyscanner search unavailable: %s", exc)
+            return []
+        return [r.model_dump(mode="json") for r in listings]
+
+    def detail(self, item_key: str) -> Dict[str, Any]:
+        """SkillProtocol.detail：单方案详情（search 已含摘要，detail 暂返回空）。"""
+        return {"item_key": item_key, "detail": {}, "status": "NOT_AVAILABLE"}
+
+    def verify(self, item_key: str) -> Dict[str, Any]:
+        """SkillProtocol.verify：未知 item 不可验证（fail-closed，不假装 verified）。"""
+        return {"item_key": item_key, "verified": False, "status": "UNVERIFIED"}
+
+    def availability(self, item_key: str) -> Dict[str, Any]:
+        return {"item_key": item_key, "available": None, "status": "UNKNOWN"}
+
+    def prepare_action(self, item_key: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """SkillProtocol.prepare_action：L2 PREPARE 未实现 → NOT_READY（绝不 commit）。"""
+        return {"item_key": item_key, "status": "NOT_READY",
+                "reason": "prepare_action not implemented (P8 search-only)"}
+
+    def health_check(self) -> Dict[str, Any]:
+        """SkillProtocol.health_check：反映源健康（当前无动态源 → UNKNOWN）。"""
+        return {"skill_id": self.skill_id, "status": "UNKNOWN",
+                "latency_ms": None, "last_success": None}
 
     # -- 懒加载浏览器 --
     def _get_fetcher(self):
