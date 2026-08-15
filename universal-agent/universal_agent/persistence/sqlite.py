@@ -16,7 +16,7 @@ from typing import Optional
 
 log = logging.getLogger("ua.persistence")
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -154,6 +154,18 @@ CREATE TABLE IF NOT EXISTS notification_dedup (
 CREATE TABLE IF NOT EXISTS killswitch (
     key TEXT PRIMARY KEY,
     data TEXT NOT NULL
+);
+
+-- P23：Railway 历史余票/得分记录（看板趋势曲线）
+CREATE TABLE IF NOT EXISTS railway_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    route TEXT NOT NULL,
+    query_date TEXT NOT NULL,
+    train_no TEXT NOT NULL,
+    seat_class TEXT NOT NULL,
+    available TEXT NOT NULL,
+    score REAL NOT NULL,
+    created_at TEXT NOT NULL
 );
 """
 

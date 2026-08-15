@@ -36,7 +36,11 @@ from universal_agent.coordinator.scanner import RailwayScanCoordinator
   票价端点 best-effort，限流时 fail-closed UNKNOWN）
 - 礼貌：每次查询间隔 1s；不做登录态/验证码绕过（SPAC §33）
 - 局限：票价端点（`leftTicketPrice`）对匿名请求限流严重，当前返回余票 + 时刻；
-  票价可后续用登录态或降低频率补全
+  **接入登录态后显示实时票价**：
+  ```bash
+  # 从浏览器 12306 登录态复制 Cookie（含 JSESSIONID）→ 看板票价列显示真实票价
+  export UA_12306_COOKIE="JSESSIONID=xxx; ..."
+  ```
 
 ## 国内其它源的可抓性评估（2026-08-15 实测）
 

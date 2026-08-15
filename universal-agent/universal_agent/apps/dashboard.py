@@ -39,7 +39,9 @@ DEFAULT_QUERY = {"from": "上海", "to": "杭州东", "date": "2026-08-20"}
 class ScanCache:
     """带 TTL 的扫描结果缓存（后台线程刷新，锁保护；按查询参数分桶）。"""
 
-    def __init__(self) -> None:
+    def __init__(self, data_dir: Path) -> None:
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._railway: Dict[str, Any] = {}
         self._railway_at: float = 0.0
@@ -57,6 +59,7 @@ class ScanCache:
             self._railway_at = now
         try:
             result = self._scan_railway(q)
+            self._record_history(result)
             with self._lock:
                 self._railway = result
                 self._last_error = ""
@@ -66,6 +69,52 @@ class ScanCache:
                 self._last_error = str(exc)
             result = self._railway
         return result
+
+    # ------------------------------------------------------------------ history
+    def _record_history(self, result: Dict[str, Any]) -> None:
+        """每次扫描写入余票/得分历史（SQLite，看板趋势曲线）。"""
+        from datetime import datetime, timezone
+        from universal_agent.persistence import Database
+
+        ranked = result.get("ranked") or []
+        if not ranked:
+            return
+        db = Database(self.data_dir / "universal_agent.db")
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            q = result.get("query", {})
+            route = f"{q.get('from','')}->{q.get('to','')}"
+            for r in ranked[:10]:
+                db.execute(
+                    "INSERT INTO railway_history "
+                    "(route, query_date, train_no, seat_class, available, score, created_at) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (route, q.get("date", ""), r.get("train_no", ""),
+                     r.get("seat_class", ""), str(r.get("available", "")),
+                     float(r.get("score", 0.0)), now))
+        finally:
+            db.close()
+
+    def history(self, query: Dict[str, str] | None = None,
+                limit: int = 60) -> Dict[str, Any]:
+        """余票/得分时间序列（看板曲线）。"""
+        from universal_agent.persistence import Database
+
+        q = query or {}
+        db = Database(self.data_dir / "universal_agent.db")
+        try:
+            route = f"{q.get('from','')}->{q.get('to','')}"
+            sql = ("SELECT train_no, seat_class, available, score, created_at "
+                   "FROM railway_history WHERE route=? AND query_date=? "
+                   "ORDER BY id DESC LIMIT ?")
+            rows = db.query_all(sql, (route, q.get("date", ""), int(limit)))
+        finally:
+            db.close()
+        rows.reverse()  # 时间正序
+        return {"history": [
+            {"train_no": r["train_no"], "seat_class": r["seat_class"],
+             "available": r["available"], "score": r["score"],
+             "created_at": r["created_at"]} for r in rows]}
 
     @staticmethod
     def _scan_railway(q: Dict[str, str]) -> Dict[str, Any]:
@@ -142,7 +191,7 @@ class ScanCache:
         return asyncio.run(_run())
 
 
-CACHE = ScanCache()
+CACHE = ScanCache(Path("/tmp/ua-dashboard-data"))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -162,13 +211,23 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs, urlparse
         parsed = urlparse(self.path)
         path = parsed.path
-        params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+
+        def _fix(v: str) -> str:
+            # 容忍未 percent-encode 的原始 UTF-8（curl 测试）；浏览器编码值原样返回
+            try:
+                return v.encode("latin-1").decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                return v
+
+        params = {k: _fix(v[0]) for k, v in parse_qs(parsed.query).items()}
         if path == "/":
             self._serve_html()
         elif path == "/api/health":
             self._json(self._health())
         elif path == "/api/railway":
             self._json(CACHE.railway(params, force=params.pop("refresh", False)))
+        elif path == "/api/railway/history":
+            self._json(CACHE.history(params))
         elif path == "/api/sources":
             self._json(self._sources())
         elif path == "/api/pipeline":

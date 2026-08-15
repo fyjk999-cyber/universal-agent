@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 import urllib.parse
@@ -48,16 +49,21 @@ class Railway12306Error(RuntimeError):
 
 
 class Railway12306Client:
-    def __init__(self, timeout: int = 15, query_delay: float = 1.0) -> None:
+    def __init__(self, timeout: int = 15, query_delay: float = 1.0,
+                 session_cookie: Optional[str] = None) -> None:
         self.timeout = timeout
         self.query_delay = query_delay
+        # 登录态 Cookie（UA_12306_COOKIE）：票价端点需要会话；可选
+        self.session_cookie = (session_cookie if session_cookie is not None
+                               else os.environ.get("UA_12306_COOKIE", ""))
         self._cj = CookieJar()
         self._op = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self._cj))
-        self._op.addheaders = [
-            ("User-Agent", UA),
-            ("Referer", f"{BASE}/otn/leftTicket/init"),
-        ]
+        headers = [("User-Agent", UA),
+                   ("Referer", f"{BASE}/otn/leftTicket/init")]
+        if self.session_cookie:
+            headers.append(("Cookie", self.session_cookie))
+        self._op.addheaders = headers
         self._stations: Optional[Dict[str, str]] = None  # 中文名 -> 站码
         self._station_codes: Optional[Dict[str, str]] = None  # 站码 -> 中文名
         self._session_ok = False

@@ -103,6 +103,14 @@
     </div>
 
     <div class="panel">
+      <h2>📈 余票/得分趋势 <span id="histMeta" class="tag"></span></h2>
+      <canvas id="histChart" height="170" style="width:100%;"></canvas>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+        每次扫描记录一条历史点；绿点=该座别有票，红点=售罄。上方为 Top 车次。
+      </div>
+    </div>
+
+    <div class="panel">
       <h2>⚙️ 事件流（本次 Scan 触发的事件）</h2>
       <div id="events"></div>
     </div>
@@ -320,6 +328,59 @@ async function compareRoutes() {
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
+async function renderHistory() {
+  try {
+    const qs = new URLSearchParams(currentQuery).toString();
+    const h = await getJSON('/api/railway/history?' + qs);
+    const pts = h.history || [];
+    $('histMeta').textContent = pts.length ? `${pts.length} 个采样点` : '';
+    const cv = $('histChart');
+    const ctx = cv.getContext('2d');
+    const W = cv.width = cv.clientWidth || 800;
+    const H = cv.height = 170;
+    ctx.clearRect(0, 0, W, H);
+    if (!pts.length) {
+      ctx.fillStyle = '#8b949e'; ctx.font = '13px sans-serif';
+      ctx.fillText('暂无历史数据（扫描后自动记录）', 12, H/2);
+      return;
+    }
+    // 按 (车次, 座别) 聚合成多系列，选前 3 条画线
+    const series = {};
+    for (const p of pts) {
+      const k = `${p.train_no} ${p.seat_class}`;
+      (series[k] = series[k] || []).push(p);
+    }
+    const keys = Object.keys(series).slice(0, 3);
+    const colors = ['#58a6ff', '#3fb950', '#bc8cff'];
+    const maxN = Math.max(...keys.map(k => series[k].length));
+    keys.forEach((k, ki) => {
+      const data = series[k];
+      const col = colors[ki % colors.length];
+      ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.beginPath();
+      data.forEach((p, i) => {
+        const x = 20 + (maxN > 1 ? i / (maxN - 1) : 0) * (W - 40);
+        const y = H - 20 - (Math.min(100, p.score) / 100) * (H - 40);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      data.forEach((p, i) => {
+        const x = 20 + (maxN > 1 ? i / (maxN - 1) : 0) * (W - 40);
+        const y = H - 20 - (Math.min(100, p.score) / 100) * (H - 40);
+        const avail = String(p.available || '').trim();
+        const ok = !(avail === '' || avail === '无' || avail === '0');
+        ctx.fillStyle = ok ? '#3fb950' : '#f85149';
+        ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill();
+      });
+    });
+    // 图例
+    ctx.font = '11px sans-serif';
+    keys.forEach((k, ki) => {
+      ctx.fillStyle = colors[ki % colors.length];
+      ctx.fillText(k, 12, 14 + ki * 16);
+    });
+  } catch (e) { /* 忽略 */ }
+}
+
 async function refresh() {
   try {
     const qs = new URLSearchParams(currentQuery).toString();
@@ -330,6 +391,7 @@ async function refresh() {
     renderRailway(rail);
     renderSources(sources);
     renderCycle(pipe.cycle);
+    renderHistory();
     t = 60;
   } catch (e) {
     $('healthPill').className = 'pill bad';
