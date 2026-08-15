@@ -54,6 +54,12 @@ class UniversalAgentService:
         self.db = Database(db_path or (self.data_dir / "universal_agent.db"))
         self.repos = RepositorySet(self.db)
         self.coordinator = TaskCoordinator(self.repos.tasks)
+        # P4: Observability（metrics/traces/logs/audit）
+        from .observability import AuditLog, MetricsRegistry, StructuredLog, Tracer
+        self.metrics = MetricsRegistry(self.data_dir / "metrics.json")
+        self.traces = Tracer(self.data_dir / "traces.jsonl")
+        self.logs = StructuredLog(self.data_dir / "logs.jsonl")
+        self.audit = AuditLog(self.data_dir / "audit")
         if host == "deepseek_harness":
             from .hosts.deepseek_harness.adapter import HarnessHostAdapter
             self.adapter = HarnessHostAdapter(coordinator=self.coordinator)
