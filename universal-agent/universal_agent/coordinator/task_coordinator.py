@@ -49,10 +49,16 @@ class TaskCoordinator:
 
     def resume(self, task_id: str) -> WatchTask:
         task = self._get(task_id)
+        # StateMachine 校验：PAUSED→WATCHING / DRAFT→ACTIVE；
+        # 已运行（WATCHING/ACTIVE）幂等；终态（CANCELLED 等）no-op 不复活
         if task.state == WatchState.PAUSED:
             task.state = transition(task.state, WatchState.WATCHING)
         elif task.state == WatchState.DRAFT:
             task.state = transition(task.state, WatchState.ACTIVE)
+        elif task.state in (WatchState.WATCHING, WatchState.ACTIVE):
+            pass  # 幂等
+        else:
+            return task  # 终态：no-op，不复活
         task.version += 1
         updated = self.repo.update(task)
         self._emit(EventType.WATCH_RESUMED, updated)
