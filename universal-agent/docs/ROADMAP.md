@@ -1,6 +1,6 @@
 # Universal Agent — Roadmap
 
-> 版本路线（§27 重新定义）· 当前：**P5 Skill Runtime 完成 → P6 Source Health/Resource Governor**
+> 版本路线（§27 重新定义）· 当前：**P6 Source Health 完成 → P7 Adaptive Watch**
 
 ## 版本规划
 
