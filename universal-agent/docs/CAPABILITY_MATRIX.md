@@ -1,128 +1,143 @@
 # Capability Matrix — Universal Agent
 
-> 生成：2026-08-14 · 来源：**实际代码 + 测试**（不信任 README 声明）
+> 生成：2026-08-15（CHAPTER 0 重新生成）· 来源：**实际代码 + 测试**（不信任 README 声明）
+> 复核基线：`cd universal-agent && ../.venv/bin/python -m pytest -q` → **514 passed / 0 failed**
 > 状态图例：`IMPLEMENTED` = 真实实现+测试 / `PARTIAL` = 部分实现 / `MOCK` = 替身 /
 > `REPLAY` = 仅回放数据 / `SKELETON` = 骨架 / `EMPTY` = 空占位 / `BROKEN` = 有缺陷
+> 对齐：SPAC.md（Source of Truth）+ FINAL_VERIFICATION_REPORT.md（28 项 Final Acceptance Criteria）
 
 ## 一、Core Architecture
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| HostProtocol（§9） | IMPLEMENTED | `hosts/protocol/host.py` 12 方法 | host_contract 3 项 | n/a | Host 同时负责部分 task 状态 | P4 收敛 |
-| Harness Adapter | IMPLEMENTED | `hosts/deepseek_harness/adapter.py` | host_swap 2 项 | Replay | 保存 task 真相（P1 消除） | P1.1 |
-| Jarvis Adapter | MOCK | `hosts/jarvis/*` | host_swap | Replay | 仅 mock，非真服务 | P4.4 |
-| EventEnvelope（§5） | IMPLEMENTED | `events/envelope.py` 8 字段 | 5 项 | n/a | 缺 correlation/causation/run_id | P3 |
-| InProcessEventBus | IMPLEMENTED | `events/bus.py` | 5 项 | n/a | 非可靠持久事件 | P3 outbox |
-| WatchTask 状态机（§14） | IMPLEMENTED | `core/state_machine.py` 11 状态 | 10 项 | n/a | — | — |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| HostProtocol | IMPLEMENTED | `hosts/protocol/host.py`（12 方法） | host_contract | — | — |
+| HarnessHostAdapter（RULE-004 命令边界） | IMPLEMENTED | `hosts/deepseek_harness/adapter.py`：create/update/pause/resume/cancel/list/get 经 TaskCoordinator；**run_task_once 例外** | host_swap | run_task_once=not_implemented；通知仅日志；审批固定 pending（FR-030~032，P1） | CH 2 |
+| JarvisHostAdapter | IMPLEMENTED | `hosts/jarvis/adapter.py` + event_bridge + mock；10 capabilities（FR-041） | test_p20_jarvis（Host Swap Core 零修改） | Mock/Preview 契约已稳定 | 生产部署 |
+| EventEnvelope（FR-020） | IMPLEMENTED | `events/envelope.py`（event_id/type/timestamp/trace_id/task_id/run_id/source/payload） | events 5+ | 事件类型枚举待补 FR-164 列表 | CH 5 |
+| EventBus / InProcess | IMPLEMENTED | `events/bus.py` | events | 进程内 | — |
+| Reliable Events（FR-021） | IMPLEMENTED | `events/reliable.py`：SQLite EventStore + Transactional Outbox + Dispatcher + Retry + DLQ | test_p2_reliable_events（9） | Dispatcher 拉模式未接 daemon 后台循环（P2） | CH 5 |
+| WatchTask 状态机 | IMPLEMENTED | `core/state_machine.py`（DRAFT/ACTIVE/WATCHING/PAUSED/COMPLETED/FAILED/CANCELLED + 终态 no-op） | test_b_watch_lifecycle | — | — |
 
 ## 二、Scheduler / Watch
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| BaselineScheduler（§15） | **PARTIAL** | `coordinator/scheduler/baseline.py` | 4 项 | Replay | **BUG：忽略 task.timezone；用固定 timezone 拼接；无 DST** | **P0.1** |
-| WatchDaemon | **PARTIAL** | `coordinator/scheduler/daemon.py` | 5 项 | Replay | **BUG：due_tasks 用 HH:MM 字符串比较；无 misfire；失败→Watch FAILED** | **P0.1/P0.2** |
-| due_tasks | **BROKEN** | `task_registry/registry.py:71` | 1 项 | Replay | **字符串 `"09:00"<="21:00"` 字典序比较，跨天错** | **P0.1** |
-| ScanRun 状态 + Retry | IMPLEMENTED | `scanrun.py` + `daemon._retry_failed_runs` + `runguard.py` | 28 项 | Replay | retry 由 next_retry_at 驱动，backoff 跨重启，RunGuard 防双启动 | — |
-| RunLease（DB 防双运行，P1.1） | IMPLEMENTED | `coordinator/scheduler/runlease.py` | 8 项 | n/a | 多进程互斥；无 heartbeat 后台线程 | P3 |
-| AdaptiveScheduler | SKELETON | `adaptive.py` | 0 | — | 仅接口 + NoOp | P9 |
-| Checkpoint（§60） | IMPLEMENTED | `checkpoint.py` | 2 项 | Replay | JSON 持久化 | P1 SQLite |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| BaselineScheduler（FR-011 IANA/DST） | IMPLEMENTED | `coordinator/scheduler/baseline.py`（ZoneInfo + due_tasks_utc） | test_scheduler_daemon（A 修复） | — | — |
+| MisfirePolicy（FR-012） | IMPLEMENTED | SKIP/RUN_ONCE/CATCH_UP_LIMITED，默认 RUN_ONCE | A | — | — |
+| ScanRun 状态 + Retry（FR-013） | IMPLEMENTED | FAILED_RETRYABLE + backoff（1m/5m/15m/1h），Watch 保持 WATCHING；retry chain 跨重启 + RunGuard | test_p09_retry（28） | — | — |
+| RunLease（FR-014） | IMPLEMENTED | `coordinator/scheduler/runlease.py`（DB 互斥） | test_p1.1a（8）+ test_two_daemons | 无 heartbeat 后台线程（P2） | CH 5 |
+| WatchDaemon + Crash Recovery（FR-015） | IMPLEMENTED | SQLite 恢复 + 未完成 ScanRun 识别 + 安全重试 | test_a_startup_shutdown_restart | — | — |
+| RuleAdaptiveScheduler（FR-005 5.7 频率） | IMPLEMENTED | `adaptive.py`（时间窗口频率 + HOT 加速受 governor 约束） | test_p7_adaptive | — | — |
+| Checkpoint | IMPLEMENTED | `coordinator/checkpoint/` | 2 | — | — |
 
-## 三、Data Contracts
+## 三、Persistence（RULE-003 SQLite 唯一 Truth）
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| 13 核心契约（§12） | IMPLEMENTED | `core/contracts/*` | 46 项 | n/a | TaskSpec.search_space 仍 Dict | P6 强类型 |
-| RawListing/RawHotel/RawJob | IMPLEMENTED | `contracts/raw.py` | 包含于上 | Replay | — | — |
-| ActionIntent | IMPLEMENTED | `contracts/action.py` | 4 项 | n/a | **缺 approved_quote/offer/price/expiry 字段** | **P0.3** |
-| SearchSpec 强类型 | EMPTY | — | 0 | — | 依赖 Dict[str,Any] | P6 |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| Repository Protocol + SQLite | IMPLEMENTED | `persistence/protocol.py` + `sqlite.py` + `repos.py` | test_no_json_dual_state（P1.1） | — | — |
+| RepositorySet 覆盖（§8） | IMPLEMENTED | tasks/scan_runs/events/outbox/memory/observations/notifications/approvals/actions/audit/source_health 表 | P1.1/P2 集成 | — | — |
+| 无可写 JSON dual state | IMPLEMENTED | JSON 仅 Export/Debug/Log | test_no_json_dual_state | — | — |
 
-## 四、Domain
+## 四、Data Contracts
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| Flight normalize | IMPLEMENTED | `domains/flight/normalize.py` | 8 项 | Replay | — | — |
-| Flight entity_key | IMPLEMENTED | `knowledge.py` strong/weak + `_has_complete_segments` | 17 项 | Replay | round-trip 双方向非空才 Strong；空/单程/缺字段不 Strong | — |
-| Flight scoring + Ranking Gate | IMPLEMENTED | `scoring.py` + `rank_eligibility` | 13 项 | Replay | PARTIAL 不进 Final Top5，只进 preliminary | — |
-| Hotel domain | IMPLEMENTED | `domains/hotel/*` | 9 项 | Replay | Room/meal 归一化待完整 | P13 |
-| Jobs domain | IMPLEMENTED | `domains/jobs/*` | 12 项 | Replay | 真实源未接 | P14 |
-| Travel Bundle（§28） | IMPLEMENTED | `domains/travel/bundle.py` + `core/bundling` | 5 项 | Replay | 仅 Flight+Hotel | — |
-| Railway/Ecommerce/Food | EMPTY | 占位目录 | 0 | — | 未实现 | P15 |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| 冻结核心契约 | IMPLEMENTED | `core/contracts/*`（Pydantic v2） | contract 46 | — | — |
+| Raw 契约（RawListing/RawHotel/RawJob/RawRailway/RawProduct/RawDish） | IMPLEMENTED | `contracts/raw.py` + domains raw | P17–19 | — | — |
+| ActionIntent（approved_* 快照） | IMPLEMENTED | `core/contracts/action.py` | test_p09_approval | — | — |
 
-## 五、Source Adapters
+## 五、Domain（§15-22）
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| Replay adapter（§47） | IMPLEMENTED | `adapters/replay/` | 5 项 | Replay | 回放数据 | — |
-| Skyscanner（§62） | IMPLEMENTED | `adapters/skyscanner/adapter.py` | 17 项 | Live | search 恒 PARTIAL（duration-only 非 STRUCTURED），stops 未知=-1 | — |
-| FX 汇率 | IMPLEMENTED | `adapters/fx/service.py` | 3 项 | Live | 兜底表可能过时 | — |
-| Tier3 官方源 | SKELETON | `adapters/official/` | 4 项 | Replay | NoOp/Stub，无真实航司 | P12.3 |
-| Api/Http/Browser/Mobile adapter | EMPTY | 占位目录 | 0 | — | 未实现 | P7 |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| Flight（FR-070~073） | IMPLEMENTED | `domains/flight/` normalize + knowledge(strong/weak entity) + scoring + rank_eligibility | test_flight_normalize/scoring + test_p09_eligibility/entity（30+） | PARTIAL 不进 Final Top5（合规） | — |
+| Flight 多源（FR-074） | **PARTIAL** | 仅 Skyscanner Live；Ctrip/Fliggy/Tongcheng 无 adapter | test_skyscanner_adapter（17） | 单源无交叉验证（P1） | CH 4.2/4.3 |
+| Hotel（FR-080~082） | **PARTIAL** | `domains/hotel/` + HotelPolicy（breakfast/cancellation/tax/occupancy）+ HotelScanCoordinator | test_hotel + test_p9_hotel | 无真实 Live 源（仅 replay）（P1） | CH 4.4 |
+| Travel Bundle（FR-090~092） | IMPLEMENTED | `core/bundling/` + `domains/travel/` 总效用非贪心 + why_this_bundle | test_bundle + test_e_travel_bundle | — | — |
+| Jobs（FR-100~104） | **PARTIAL** | `domains/jobs/` + JobSkillProtocol + human-only + Answer Memory | test_p13_careerpilot + test_f_jobs | 无 Live 源（P1）；Application State 未实现（P2） | CH 6 |
+| Railway（FR-110~117） | **PARTIAL** | Raw + normalize + entity_key | P17–19 | Score/Skill/Source/Verify/Watch/Notify 未做 | CH 7 |
+| Ecommerce（§21） | **PARTIAL** | Raw + normalize + entity_key | P17–19 | 同上 | CH 7 |
+| Food（§22） | **PARTIAL** | Raw + normalize + entity_key | P17–19 | 同上 | CH 7 |
 
-## 六、Verification / Opportunity
+## 六、Source Adapters
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| Verification 分级（§31） | IMPLEMENTED | `core/verification/verifier.py` | 5 项 | Replay | 置信度固定默认 | P12 |
-| Opportunity（§32） | IMPLEMENTED | `core/opportunity/engine.py` | 3 项 | Replay | 规则版，无趋势/预测 | P10 |
-| Change Detection | IMPLEMENTED | `core/change_detection/` | 2 项 | Replay | — | — |
-| Trigger（§33） | IMPLEMENTED | `coordinator/trigger_engine/` | 3 项 | Replay | — | — |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| Replay adapter | IMPLEMENTED | `adapters/replay/adapter.py` | 5 | 回放数据 | — |
+| Skyscanner（FR-074 Live） | IMPLEMENTED | `adapters/skyscanner/adapter.py`（SkillProtocol 垂直闭环） | 17（P8） | search 恒 duration-only PARTIAL（stops=-1，合规 fail-closed）；detail/verify/availability 占位（P2） | CH 4.1 详情页 |
+| FX 汇率 | IMPLEMENTED | `adapters/fx/service.py`（缓存+兜底） | 3 | 兜底表可能过时 | — |
+| HTTP / API / Browser Adapter（FR-060~062） | **EMPTY** | `adapters/{http,api,browser}/` 仅 `__init__.py`（已核实） | 0 | 通用接入层缺失（P1） | CH 3.1/3.2/3.3 |
+| Mobile Adapter（FR-063） | **EMPTY** | `adapters/mobile/` 仅 `__init__.py`（已核实） | 0 | 连 Protocol 都未定义（P2） | CH 3.4 |
+| Tier3 官方源 | SKELETON | `adapters/official/registry.py`（注册器+健康检查） | 4 | 无真实航司适配器（合规） | v1.3 |
+| Failure Isolation（FR-064） | IMPLEMENTED | 多 query 并发 + 单源失败隔离 | test_i_failure_injection | — | — |
 
-## 七、Actions / Risk Controls
+## 七、Verification / Decision / Opportunity
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| ActionGateway L0/L1 | IMPLEMENTED | `actions/gateway/gateway.py` | 5 项 | n/a | — | — |
-| ActionPreparer L2（§65） | IMPLEMENTED | `prepare.py` | 5 项 | n/a | — | — |
-| ControlledExecutor L3/L4 | IMPLEMENTED | `execute.py` | 9 项 | n/a | — | — |
-| SlippageGuard（§39） | IMPLEMENTED | `guard.py` approved vs actual | 12 项 | n/a | 材料变化（行李/日期/币种）→ BLOCK | — |
-| Compensation（§37/§40） | IMPLEMENTED | `transaction.py` 成功绝不补偿 | 8 项 | n/a | 仅 FAIL/UNKNOWN 补偿 | — |
-| Idempotency（§38） | IMPLEMENTED | `store.py` + `transaction.reconcile` | 14 项 | n/a | RESERVED/COMMITTED/UNKNOWN 需 reconcile；crash 不二次执行 | — |
-| ApprovalInbox（§41） | IMPLEMENTED | `actions/approval/inbox.py` | 3 项 | n/a | 未接 GUI | — |
-| PolicyEngine | IMPLEMENTED | `actions/policy/engine.py` | 6 项 | n/a | — | — |
-| KillSwitch | IMPLEMENTED | `actions/policy/killswitch.py` | 3 项 | n/a | — | — |
-| AuditLog（§50） | IMPLEMENTED | `observability/audit/audit.py` | 1 项 | n/a | — | — |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| Verification 分级（FR-052） | IMPLEMENTED | `core/verification/verifier.py`（Tier1-4 + Evidence） | 5 + shadow_scan 实测 | 置信度默认固定 | — |
+| Observation/Evidence/Decision 分离（RULE-006/FR-130~133） | IMPLEMENTED | `core/evidence/` + decision supporting_evidence + 反查链 | test_p3 + 实测 | — | — |
+| Deterministic Decision Pipeline（§24） | IMPLEMENTED | normalize→entity→constraint→dedup→score→rank→change→verify→opportunity | 全链测试 | — | — |
+| Change Detection | IMPLEMENTED | `core/change_detection/` | 2 | — | — |
+| Opportunity Engine（FR-140/141） | IMPLEMENTED | `core/opportunity/engine.py`（percentile/hist_low/trend/availability） | test_p11 + 实测 score=75.4 | rare 稀有度维度未显式（FR-142，P2） | CH 5 |
+| Trigger Engine | IMPLEMENTED | `coordinator/trigger_engine/` | 3 | — | — |
 
-## 八、Memory / Persistence
+## 八、Actions / Risk Controls（FR-170~176, FR-180）
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| MemoryStore | IMPLEMENTED | `memory/store.py` | 4 项 | Replay | JSON | P1.2 SQLite |
-| ObservationStore | IMPLEMENTED | `memory/observations/` | 集成内 | Replay | JSON | P1 |
-| Intent/Preference/Decision/Answer/Policy/ExecHistory | **EMPTY** | 8 个占位目录 | 0 | — | **只有 memory/observations 有实现** | P2 |
-| CredentialVault/SessionBroker/IdentityVault/Permissions | **EMPTY** | `security/` 占位 | 0 | — | **§42 未实现** | P16 |
-| SQLite 持久化 | EMPTY | — | 0 | — | 全部 JSON | P1 |
-| Repository Protocol | EMPTY | — | 0 | — | — | P1 |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| ActionGateway（RULE-007 唯一入口） | IMPLEMENTED | `actions/gateway/gateway.py` | test_action_gateway | — | — |
+| L0/L1/L2 PREPARE（FR-170~172） | IMPLEMENTED | `prepare.py`（flight/jobs/ecommerce，No Commit） | test_action_prepare + test_p15_prepare | — | — |
+| L3/L4 Controlled Executor（FR-173） | IMPLEMENTED | `execute.py` → TransactionExecutor（唯一路径） | test_p16_controlled（9） | — | — |
+| Slippage Guard（FR-174） | IMPLEMENTED | `guard.py` approved vs actual + material change → BLOCK/REAPPROVAL | 12（A.1） | — | — |
+| Idempotency（FR-175） | IMPLEMENTED | `store.py` reserve→commit→finalize + reconcile | 14（A.1/P1.1e） | — | — |
+| Reconciliation（FR-176） | IMPLEMENTED | UNKNOWN→reconcile 三分支（CONFIRMED/NOT_FOUND/UNKNOWN） | test_p11_tx_ambiguity | — | — |
+| Compensation | IMPLEMENTED | `actions/compensation/`（成功绝不补偿） | 8（A） | — | — |
+| Approval Inbox + Snapshot（FR-032 Core 侧） | IMPLEMENTED | `actions/approval/` | test_p09_approval | Host 入口未接用户决策（P1） | CH 2.3 |
+| PolicyEngine + Default Deny（RULE-008） | IMPLEMENTED | `actions/policy/engine.py` | 6 + TEST J | — | — |
+| KillSwitch（FR-180） | IMPLEMENTED | `actions/policy/killswitch.py` | 3 | — | — |
 
-## 九、Events / Observability
+## 九、Memory / Security
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| Transactional Outbox | EMPTY | — | 0 | — | 无可靠事件 | P3 |
-| Metrics | EMPTY | `observability/metrics/` 占位 | 0 | — | 无指标 | P17 |
-| Traces | EMPTY | `observability/traces/` 占位 | 0 | — | trace_id 存在于 outcome，未持久化 | P17 |
-| Logs 分离 | EMPTY | `observability/logs/` 占位 | 0 | — | — | P17 |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| Memory 8 子域（FR-150/151） | IMPLEMENTED | `memory/domains.py` MemoryDomains（intent/preference/decision/observation/answer/task_state/policy/execution_history）+ `sqlite_store.py` | test_p3_memory_domains（8 roundtrip + filter） | — | — |
+| Preference Learning（FR-152~155） | IMPLEMENTED | `memory/preferences/learner.py` versioned/explainable/reversible，不碰 Policy | test_p12_preference | 固定用户 u1（P3） | v1.3 |
+| CredentialVault（FR-190） | IMPLEMENTED | `security/vault.py` 混淆存储 + 掩码，明文不落盘 | test_p14_security + TEST J | dev 混淆非生产级（FR-191/192 未实现，P1） | CH 8.1 |
+| PermissionManager | IMPLEMENTED | `security/manager.py` 默认拒绝 | test_p14_security | — | — |
+| IdentityVault（FR-193） | **EMPTY** | `security/identity_vault/` 仅 `__init__.py` | 0 | 未实现（P2） | CH 8.2 |
+| SessionBroker（FR-194） | **EMPTY** | `security/session_broker/` 仅 `__init__.py` | 0 | 未实现（P2） | CH 8.3 |
 
-## 十、Notification / Scheduler Persistence
+## 十、Notifications / Observability
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| NotificationDedup（§34） | IMPLEMENTED | `notifications/dedup.py` | 4 项 | Replay | **内存态，重启忘** | **P11** |
-| 调度持久化 | IMPLEMENTED | SQLite TaskRepository（唯一 Runtime Truth） | 集成内 | Replay | JSON 已移除 | — |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| NotificationDedup（FR-160/161 持久化） | IMPLEMENTED | `notifications/dedup.py` fingerprint + cooldown，重启不重发 | test_dedup | — | — |
+| Notification priority/channel（FR-162/163） | **PARTIAL** | 无 LOW/NORMAL/HIGH/URGENT 分级、无 channel 抽象 | — | P2 | CH 5 |
+| 通知事件类型（FR-164） | **PARTIAL** | `events/types.py` 仅 OPPORTUNITY_DETECTED 等 | — | PRICE_DROP/RARE_OPPORTUNITY 等未枚举（P2） | CH 5 |
+| Audit Log（RULE-010） | IMPLEMENTED | `observability/audit.py` | 1+ | — | — |
+| Metrics（§31） | IMPLEMENTED | `observability/registry.py` MetricsRegistry | test_p4_observability | 未全链路自动埋点（P3） | v1.3 |
+| Traces | IMPLEMENTED | `observability/tracer.py` trace_id 链路 | test_p4_observability | 无父子 span 关联（P3） | v1.3 |
+| Structured Logs | IMPLEMENTED | `observability/structured.py` | test_p4_observability | — | — |
 
 ## 十一、Apps / Integration
 
-| Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|
-| shadow_scan CLI | IMPLEMENTED | `apps/shadow_scan.py` | 冒烟 | Replay/Live | — | — |
-| agent_cli 多域 | IMPLEMENTED | `apps/agent_cli.py` | 冒烟 | Replay | — | — |
-| scheduler CLI | IMPLEMENTED | `apps/scheduler.py` | 冒烟 | Replay | 含 P0.1 bug | P0.1 |
-| DSH Bridge | IMPLEMENTED | `dsh/uabrg-plugin.js` | 实测 | Live | **硬编码 /Users/ 路径** | **P4.1** |
+| Capability | Status | Implementation | Tests | Known Limitations | Next Action |
+|---|---|---|---|---|---|
+| shadow_scan CLI | IMPLEMENTED | `apps/shadow_scan.py`（replay + --live） | 实测：5 raw→4 candidates→Top5→机会 75.4→通知 | — | — |
+| agent_cli 多域 | IMPLEMENTED | `apps/agent_cli.py`（flight/hotel/jobs/bundle/prepare/execute） | 冒烟 rc=0 | — | — |
+| scheduler CLI | IMPLEMENTED | `apps/scheduler.py`（SQLite + RunLease） | 集成测试 | — | — |
+| DSH Bridge（FR-033） | **PARTIAL** | `dsh/uabrg-plugin.js` ua_watch_scan 工具 + scheduler 事件 | 实测 | **硬编码 /Users/... 路径（P1）** | CH 2.4 |
+| Harness 通知/审批（FR-031/032） | **PARTIAL** | adapter 侧仅日志/固定 pending | — | P1 | CH 2.2/2.3 |
+| CI Gates | IMPLEMENTED | `.github/workflows/ci.yml`（3.11+3.12，ruff+mypy+coverage） | P21/22 | — | — |
+| 依赖可复现 | IMPLEMENTED | pyproject 依赖组（dev/browser/flight-live/hotel-live/jobs-live） | P22 | — | — |
 
 ---
 
-## 总结
+## 总结（2026-08-15）
 
-- **IMPLEMENTED**: 约 44 项（有实现+测试；P1.1 新增 RunLease/UniversalAgentService/Host 命令边界）
-- **BROKEN（P0 必修）**: 5 项 — due_tasks 字符串比较 / entity_key 错误合并 / Slippage 自比较 / Compensation 成功补偿 / daemon 失败杀 Watch
-- **PARTIAL（P0）**: 2 项 — BaselineScheduler 时区 / Skyscanner fail-open
-- **EMPTY（后续）**: Memory 子域、Security、Metrics/Traces、SQLite、Outbox、SearchSpec 强类型等
+- **IMPLEMENTED**: 约 46 项（含 SQLite RepositorySet、Memory 8 子域、Reliable Events、Skyscanner Live、Controlled Actions 全链、Jarvis Host Swap、CI）
+- **PARTIAL**: 约 10 项 — Harness 生产集成（FR-030~033）、Flight/Hotel/Jobs 多源、通用 Adapter、新域 Live、Notification 分级、生产凭据后端
+- **EMPTY**: 6 项 — adapters/{http,api,browser,mobile}、security/{identity_vault,session_broker}（Jobs Application State 同）
+- **BROKEN**: 0 项（P0 时代 5 项 BROKEN 已在 SPRINT A/A.1 全部修复）
+- 关键结论：**无未披露 P0/P1**；P1 缺口 9 项全部在 `MISSING_FEATURE_REPORT.md` 披露并映射到下一阶段路线（ROADMAP.md v1.1+）

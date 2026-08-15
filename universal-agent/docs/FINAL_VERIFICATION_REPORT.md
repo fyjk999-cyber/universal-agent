@@ -77,6 +77,20 @@
 - CredentialVault dev 混淆非生产级（生产接 OS Keychain）
 - 真实支付/自动执行默认 DENY（设计边界）
 
+## 已披露缺口（CHAPTER 2 — DeepSeek Harness Production Integration，2026-08-15 审计补充）
+
+> 本验收（TEST A–J）覆盖 v1.0 Core 验收。以下 SPAC 硬性 FR 经代码审计确认**未达成**，
+> 由 `MISSING_FEATURE_REPORT.md` 跟踪（P1 级，下一阶段 CHAPTER 2 修复）：
+
+| FR | 要求 | 实际（代码证据） |
+|---|---|---|
+| FR-030 | `run_task_once()` 不得 `not_implemented` | `hosts/deepseek_harness/adapter.py:56-57` 返回 `{"status": "not_implemented"}` |
+| FR-031 | Harness 通知真实送达（非仅日志） | `adapter.py:70-71` `send_notification` 仅 `log.info` |
+| FR-032 | 审批不得固定返回 `pending` | `adapter.py:73-75` 固定返回 `{"approved": False, "status": "pending"}` |
+| FR-033 | DSH Bridge 无硬编码路径 | `dsh/uabrg-plugin.js:20-21` 硬编码 `/Users/huhongjie/...`；未接 `UA_ROOT/UA_PYTHON/UA_DATA_DIR/UA_CONFIG` |
+
+结论：Core v1.0 验收成立；**CHAPTER 2 完成度 = PARTIAL**，需在下一阶段按 SPAC §36 补齐后重跑 Chapter 2 Gate。
+
 ## 结论
 
 **Universal Agent v1.0 达到生产级验收标准：514 tests 全绿，TEST A-J 全 PASS，
