@@ -47,3 +47,17 @@
 - 真实支付/自动执行默认 DENY（§56/§66）
 - Tier3 官方源为骨架（NoOp/Stub）
 - Railway/Ecommerce/Food 未实现（规划内）
+
+## P1.1 后（Runtime Unification）更新
+
+**已解决：**
+1. JSON dual state 消除：WatchDaemon 用 SQLite Repository（`load_watch_daemon`），不再创建 JSON task_registry.json / scan_runs
+2. Host Write Boundary：update_task 经 `TaskCoordinator.apply_update` 命令（StateMachine 校验），Harness+Jarvis 都不再直接 repo.update()
+3. 多进程防双运行：RunLease（DB-backed，run_leases 表）接入 WatchDaemon baseline/retry/misfire 三路径
+4. Transaction external-call 歧义锁定：异常 → UNKNOWN → reconcile（CONFIRMED/NOT_FOUND/UNKNOWN 三分支）
+
+**剩余（后续 Sprint）：**
+- RunLease 无 heartbeat 后台线程（renew 由调用方负责）
+- UniversalAgentService.RepositorySet 仅 tasks/scan_runs，memory/events 等 P3 并入
+- 无 Transactional Outbox Dispatcher（P3）
+- 无 PostgreSQL（计划内 SQLite 优先）

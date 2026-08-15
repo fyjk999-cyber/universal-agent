@@ -23,6 +23,7 @@
 | WatchDaemon | **PARTIAL** | `coordinator/scheduler/daemon.py` | 5 项 | Replay | **BUG：due_tasks 用 HH:MM 字符串比较；无 misfire；失败→Watch FAILED** | **P0.1/P0.2** |
 | due_tasks | **BROKEN** | `task_registry/registry.py:71` | 1 项 | Replay | **字符串 `"09:00"<="21:00"` 字典序比较，跨天错** | **P0.1** |
 | ScanRun 状态 + Retry | IMPLEMENTED | `scanrun.py` + `daemon._retry_failed_runs` + `runguard.py` | 28 项 | Replay | retry 由 next_retry_at 驱动，backoff 跨重启，RunGuard 防双启动 | — |
+| RunLease（DB 防双运行，P1.1） | IMPLEMENTED | `coordinator/scheduler/runlease.py` | 8 项 | n/a | 多进程互斥；无 heartbeat 后台线程 | P3 |
 | AdaptiveScheduler | SKELETON | `adaptive.py` | 0 | — | 仅接口 + NoOp | P9 |
 | Checkpoint（§60） | IMPLEMENTED | `checkpoint.py` | 2 项 | Replay | JSON 持久化 | P1 SQLite |
 
@@ -106,7 +107,7 @@
 | Capability | Status | Implementation | Tests | Live/Replay | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|
 | NotificationDedup（§34） | IMPLEMENTED | `notifications/dedup.py` | 4 项 | Replay | **内存态，重启忘** | **P11** |
-| 调度持久化 | PARTIAL | TaskRegistry/Checkpoint JSON | 集成内 | Replay | JSON | P1 |
+| 调度持久化 | IMPLEMENTED | SQLite TaskRepository（唯一 Runtime Truth） | 集成内 | Replay | JSON 已移除 | — |
 
 ## 十一、Apps / Integration
 
@@ -121,7 +122,7 @@
 
 ## 总结
 
-- **IMPLEMENTED**: 约 40 项（有实现+测试）
+- **IMPLEMENTED**: 约 44 项（有实现+测试；P1.1 新增 RunLease/UniversalAgentService/Host 命令边界）
 - **BROKEN（P0 必修）**: 5 项 — due_tasks 字符串比较 / entity_key 错误合并 / Slippage 自比较 / Compensation 成功补偿 / daemon 失败杀 Watch
-- **PARTIAL（P0）**: 3 项 — BaselineScheduler 时区 / ScanRun 缺失 / Idempotency 无 reconcile / Skyscanner fail-open
+- **PARTIAL（P0）**: 2 项 — BaselineScheduler 时区 / Skyscanner fail-open
 - **EMPTY（后续）**: Memory 子域、Security、Metrics/Traces、SQLite、Outbox、SearchSpec 强类型等
