@@ -26,6 +26,10 @@ class MemoryRecord(BaseModel):
     updated_at: datetime = Field(default_factory=utc_now)
     source: str = "system"
     expires_at: Optional[datetime] = None
+    # P3: 用户/档案隔离 + 置信度
+    user_id: Optional[str] = None
+    profile_id: Optional[str] = None
+    confidence: Optional[float] = None
 
 
 class MemoryQuery(BaseModel):

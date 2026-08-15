@@ -36,8 +36,12 @@ class RepositorySet:
         self.db = db
         self.tasks = SqliteTaskRepository(db)
         self.scan_runs = SqliteScanRunRepository(db)
+        # P3: Memory（8 子域类型化访问器）
+        from .memory.domains import MemoryDomains
+        from .memory.sqlite_store import SqliteMemoryStore
+        self.memory = MemoryDomains(SqliteMemoryStore(db))
 
-    # 后续 Sprint（P3/P4）：memory/events/observations/notifications/approvals/
+    # 后续 Sprint（P4+）：events/observations/notifications/approvals/
     # actions/audit/source_health 全部并入此处，共享同一 db。
 
 

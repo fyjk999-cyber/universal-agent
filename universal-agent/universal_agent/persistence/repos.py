@@ -136,10 +136,15 @@ class SqliteMemoryRepository(MemoryRepository):
         return MemoryRecord.model_validate(json.loads(rows[0]["data"]))
 
     def query(self, q: MemoryQuery) -> List[MemoryRecord]:
+        from ..core.contracts import utc_now
         rows = self.db.query_all("SELECT data FROM memories")
         out = []
+        now = utc_now()
         for r in rows:
             rec = MemoryRecord.model_validate(json.loads(r["data"]))
+            # P1.5: expired 自动过滤
+            if rec.expires_at is not None and rec.expires_at <= now:
+                continue
             if q.scope is not None and rec.scope != q.scope:
                 continue
             if q.domain is not None and rec.domain != q.domain:
@@ -147,6 +152,8 @@ class SqliteMemoryRepository(MemoryRepository):
             if q.task_id is not None and rec.task_id != q.task_id:
                 continue
             if q.key is not None and rec.key != q.key:
+                continue
+            if q.kind is not None and rec.kind != q.kind:
                 continue
             out.append(rec)
         return out[: q.limit]
