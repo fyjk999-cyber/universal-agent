@@ -1,6 +1,6 @@
 # Universal Agent — Roadmap
 
-> 版本路线（§27 重新定义）· 当前：**P8 Flight Live 完成 → P9 Hotel Live**
+> 版本路线（§27 重新定义）· 当前：**v1.0 完成（FINAL VERIFICATION ACCEPTED，514 tests）**
 
 ## 版本规划
 
@@ -18,7 +18,7 @@
 | v0.12 | Railway | 新 Domain | 待 P15 |
 | v0.13 | Ecommerce | 新 Domain | 待 P15 |
 | v0.14 | Jarvis Integration Preview | Host Swap 实战 | 待 P16 |
-| v1.0 | Stable Runtime | 长期 Watch 稳定 | 最终 |
+| v1.0 | Stable Runtime | 长期 Watch 稳定 + FINAL VERIFICATION 全量验收通过（514 tests，TEST A-J PASS） | ✅ 完成（2026-08-14） |
 
 ## 当前 Sprint：SPRINT 0 + SPRINT A（P0）
 
