@@ -194,3 +194,38 @@ class Database:
 
     def query_all(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         return self.conn().execute(sql, params).fetchall()
+
+    def transaction(self):
+        """事务上下文管理器：BEGIN...COMMIT/ROLLBACK（同事务多写）。
+
+        P2: 业务状态 + outbox 必须同事务原子写。
+        """
+        return _Transaction(self)
+
+
+class _Transaction:
+    """SQLite 事务上下文（复用连接，BEGIN/COMMIT/ROLLBACK）。"""
+
+    def __init__(self, db: Database) -> None:
+        self.db = db
+        self._conn: Optional[sqlite3.Connection] = None
+        self._nested = False
+
+    def __enter__(self) -> sqlite3.Connection:
+        if self.db._conn is not None:
+            # 已有连接（可能来自 execute 的隐式提交）→ 直接在其上 BEGIN
+            self._conn = self.db._conn
+        else:
+            self._conn = self.db._connect()
+            self.db._conn = self._conn
+        self._conn.execute("BEGIN")
+        return self._conn
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            if exc_type is None:
+                self._conn.execute("COMMIT")
+            else:
+                self._conn.execute("ROLLBACK")
+        finally:
+            self._conn = None

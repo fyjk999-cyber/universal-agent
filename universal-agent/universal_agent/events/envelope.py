@@ -20,6 +20,9 @@ class EventEnvelope(BaseModel):
     schema_version: str = "1.0"
     trace_id: str
     task_id: Optional[str] = None
+    run_id: Optional[str] = None            # P2: 关联 ScanRun
+    correlation_id: Optional[str] = None    # P2: 跨事件流程关联
+    causation_id: Optional[str] = None      # P2: 直接前因事件
     source: str = "universal-agent"
     created_at: datetime = Field(default_factory=utc_now)
     payload: Dict[str, Any] = Field(default_factory=dict)

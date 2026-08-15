@@ -81,6 +81,10 @@ class SqliteOutboxRepository(OutboxRepository):
         self.db.execute("UPDATE event_outbox SET status='DEAD', attempts=attempts+1 "
                         "WHERE outbox_id=?", (outbox_id,))
 
+    def bump_attempts(self, outbox_id: int, attempts: int) -> None:
+        self.db.execute("UPDATE event_outbox SET attempts=? WHERE outbox_id=?",
+                        (attempts, outbox_id))
+
 
 class SqliteObservationRepository(ObservationRepository):
     def __init__(self, db: Database) -> None:
