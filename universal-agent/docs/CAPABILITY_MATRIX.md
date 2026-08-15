@@ -55,7 +55,7 @@
 | Hotel（FR-080~082） | **PARTIAL** | `domains/hotel/` + HotelPolicy（breakfast/cancellation/tax/occupancy）+ HotelScanCoordinator | test_hotel + test_p9_hotel | 无真实 Live 源（仅 replay）（P1） | CH 4.4 |
 | Travel Bundle（FR-090~092） | IMPLEMENTED | `core/bundling/` + `domains/travel/` 总效用非贪心 + why_this_bundle | test_bundle + test_e_travel_bundle | — | — |
 | Jobs（FR-100~104） | **PARTIAL** | `domains/jobs/` + JobSkillProtocol + human-only + Answer Memory | test_p13_careerpilot + test_f_jobs | 无 Live 源（P1）；Application State 未实现（P2） | CH 6 |
-| Railway（FR-110~117） | **PARTIAL**（Live 源已接入） | Raw + normalize + entity_key（P17-19）+ **12306 真实余票源（`adapters/railway/`，无 key，实测 20 条）** | test_railway_12306（4 项，含真实接口 live 测试） | 票价端点限流（best-effort）；Watch/Scoring 未接 | CH 7 |
+| Railway（FR-110~117） | **LIVE READY ✅** | Raw + normalize + entity_key + **scoring（确定性）+ verify（新鲜度/完整性）+ 12306 Live 源 + RailwayScanCoordinator（scan→normalize→score→rank→opportunity→notify，实测 20 raw→4 candidates→机会→通知）**；`RAILWAY_LIVE_READY=True` | test_railway_12306 + test_railway_pipeline（11 项，含真实接口） | 票价 best-effort（余票/时刻全量） | — |
 | Ecommerce（§21） | **PARTIAL** | Raw + normalize + entity_key | P17–19 | 同上 | CH 7 |
 | Food（§22） | **PARTIAL** | Raw + normalize + entity_key | P17–19 | 同上 | CH 7 |
 

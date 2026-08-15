@@ -148,25 +148,49 @@ def _execute() -> None:
     print(f"  status={out.status}  detail={out.detail}")
 
 
-def _railway() -> None:
-    """12306 真实余票查询（无 key 公开接口）。"""
+async def _railway() -> None:
+    """12306 真实余票全流程（Scan→Normalize→Score→Rank→Opportunity→Notify）。"""
     from universal_agent.adapters.railway import Railway12306Skill
+    from universal_agent.core.contracts import TaskSpec, TaskType, TriggerRule
+    from universal_agent.coordinator.scanner import RailwayScanCoordinator
+    from universal_agent.events import InProcessEventBus
+    from universal_agent.registry import MarketplaceManifest, SkillRegistry
+
+    reg = SkillRegistry()
     skill = Railway12306Skill()
-    print("== 12306 实时余票（上海→杭州东）==")
-    items = skill.search({"from_city": "上海", "to_city": "杭州东",
-                          "date": "2026-08-20"})[:10]
-    if not items:
-        print("  暂无数据（12306 限流或不可达）")
-        return
-    for it in items:
-        print(f"  {it['train_no']} {it['depart_time']}→{it['arrive_time']} "
-              f"{it['seat_class']} 余票={it['available']}")
+    reg.register_marketplace(MarketplaceManifest(
+        id="railway_12306", domains=["railway"], health="HEALTHY",
+        capabilities={"search": True}, trust={"default_score": 0.85}))
+
+    delivered: list = []
+
+    coord = RailwayScanCoordinator(
+        bus=InProcessEventBus(), registry=reg,
+        fetchers={"railway_12306": skill.fetch}, notifier=delivered.append)
+    task = TaskSpec(id="railway-watch-demo", type=TaskType.WATCH,
+                    domain="railway",
+                    notify_if=TriggerRule(),
+                    search_space={"origin": ["上海"], "destination": ["杭州东"],
+                                  "departure": {"start": "2026-08-20"}})
+    out = await coord.scan(task)
+    print(f"== 12306 Railway 全流程（raw={len(out.raw_railways)} "
+          f"candidates={len(out.candidates)}）==")
+    for i, s in enumerate(out.ranked[:8], 1):
+        r = s["raw"]
+        print(f"  #{i} {r.train_no} {r.depart_time}→{r.arrive_time} "
+              f"{r.seat_class} 余票={r.extra.get('available','')} "
+              f"score={s['score']:.0f}")
+    if out.opportunity:
+        o = out.opportunity
+        print(f"[机会] {o['train_no']} {o['route']} {o['depart']} "
+              f"{o['seat_class']} 余票={o['available']} score={o['score']:.0f}")
+    print(f"[通知] {'已投递' if delivered else '无机会不通知'}")
 
 
 async def _run(domain: str) -> None:
     handlers = {
         "flight": _flight, "hotel": _hotel, "jobs": _jobs,
-        "railway": lambda: _railway(),
+        "railway": _railway,
         "bundle": lambda: _bundle(), "prepare": lambda: _prepare(),
         "execute": lambda: _execute(),
     }
@@ -174,7 +198,7 @@ async def _run(domain: str) -> None:
     if fn is None:
         print(f"未知 domain: {domain}；可选: {', '.join(handlers)}")
         sys.exit(1)
-    if domain in ("flight", "hotel", "jobs"):
+    if domain in ("flight", "hotel", "jobs", "railway"):
         await fn()
     else:
         fn()

@@ -17,14 +17,19 @@
 12306 公开匿名接口（`kyfw.12306.cn`）无需注册，直接可查国内火车**余票 + 时刻**：
 
 ```bash
-# 直接可用（上海→杭州东，2026-08-20 实测 20 条精确车次记录）
+# 完整流程（Scan→Normalize→Score→Rank→Opportunity→Notify）
 python -m universal_agent.apps.agent_cli --domain railway
-# → G7357 08:00→09:36 商务座 余票=H3 / 一等座 01 / 二等座 06 ...
+# → raw=20 candidates=4；#1 G7357 08:00→09:36 一等座 余票=01 score=91
+# → [机会] G7357 上海→杭州东 2026-08-20 08:00 一等座 余票=01
+# → [通知] 已投递
 
 # 程序化使用
 from universal_agent.adapters.railway import Railway12306Skill
 skill = Railway12306Skill()
 items = skill.search({"from_city": "上海", "to_city": "杭州东", "date": "2026-08-20"})
+
+# 完整协调器（Watch 用）
+from universal_agent.coordinator.scanner import RailwayScanCoordinator
 ```
 
 - 实现：`adapters/railway/`（会话初始化 → 车站表 → queryG 余票/时刻；精确车站匹配；

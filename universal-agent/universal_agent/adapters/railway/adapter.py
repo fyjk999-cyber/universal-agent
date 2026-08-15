@@ -56,6 +56,7 @@ class Railway12306Skill(SkillProtocol):
                     "depart_date": _fmt_date(t["date"]),
                     "depart_time": t["depart"],
                     "arrive_time": t["arrive"],
+                    "duration": t.get("duration", ""),
                     "seat_class": seat,
                     "available": avail,
                 })
@@ -78,7 +79,9 @@ class Railway12306Skill(SkillProtocol):
                     origin_city=item["origin_city"], dest_city=item["dest_city"],
                     depart_date=item["depart_date"], depart_time=item["depart_time"],
                     arrive_time=item["arrive_time"], seat_class=item["seat_class"],
-                    price_cny=0.0))  # 票价 best-effort（0.0 → 归一化标 UNKNOWN）
+                    price_cny=0.0,  # 票价 best-effort（0.0 → 归一化标 UNKNOWN）
+                    extra={"available": item.get("available", ""),
+                           "duration": item.get("duration", "")}))
             except Exception as exc:  # noqa: BLE001 — fail-closed
                 log.warning("railway_12306 跳过坏记录 %s: %s",
                             item.get("railway_id"), exc)

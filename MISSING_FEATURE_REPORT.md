@@ -485,11 +485,11 @@
 
 **Requirement:** FR-113 / FR-114 / FR-115 / FR-116 / FR-117
 **Expected:** Railway 至少实现 Scoring/Live Skill/Availability/Watch/Verification，满足后才标记 RAILWAY_LIVE_READY（SPAC §20 / CH7）。Ecommerce/Food 同样需 Raw/Normalize/Entity/Price/Availability/Source/Verify/Score/Watch/Prepare 与 ECOMMERCE_LIVE_READY/FOOD_LIVE_READY。
-**Actual:** `domains/railway/` 只有 normalize.py（52 行）+ `__init__.py`；FR-110 Raw Contract（`core/contracts/raw.py:185-200` RawRailway）、FR-111 Normalize、FR-112 Entity Key 已实现且有测试（`test_p17_19_domains.py:16-31`）；**2026-08-15 更新：FR-114 Live Skill 已接入 `adapters/railway/`（12306 公开接口，无 key，实测 上海→杭州东 20 条精确余票记录；`agent_cli --domain railway` 可用）**；**仍缺 scoring、availability、watch、verification + 票价端点（leftTicketPrice 匿名限流，best-effort）**；全仓库 grep `RAILWAY_LIVE_READY`/`ECOMMERCE_LIVE_READY`/`FOOD_LIVE_READY` 零命中。Ecommerce（`domains/ecommerce/normalize.py` 48 行）/Food（`domains/food/normalize.py` 44 行）同构：仅 normalize + entity_key。
-**Status:** PARTIAL（Railway Live search 达成；余下 Scoring/Watch/Verification 未做）
+**Actual:** `domains/railway/` 只有 normalize.py（52 行）+ `__init__.py`；FR-110 Raw Contract（`core/contracts/raw.py:185-200` RawRailway）、FR-111 Normalize、FR-112 Entity Key 已实现且有测试（`test_p17_19_domains.py:16-31`）；**2026-08-15 更新：FR-113 Scoring（`domains/railway/scoring.py` 确定性评分）、FR-114 Live Skill（`adapters/railway/` 12306 公开接口）、FR-115 Availability（余票字段）、FR-116 Watch（`coordinator/scanner/railway.py` 全流程：scan→normalize→score→rank→opportunity→notify，实测 上海→杭州东 20 raw→机会→通知）、FR-117 Verification（`domains/railway/verify.py` 新鲜度/完整性）全部达成；`RAILWAY_LIVE_READY=True`**；Ecommerce（`domains/ecommerce/normalize.py` 48 行）/Food（`domains/food/normalize.py` 44 行）同构：仅 normalize + entity_key。
+**Status:** PARTIAL（**Railway LIVE READY ✅**；Ecommerce/Food 未做）
 **Severity:** P2
-**Affected Modules:** domains/railway/, domains/ecommerce/, domains/food/, adapters/railway/（新增 Live）
-**Missing Work:** 按 CH7 顺序补齐每域 Scoring/Skill/Source/Verify/Watch/Notification，并声明 *_LIVE_READY。
+**Affected Modules:** domains/railway/（已 LIVE）、domains/ecommerce/、domains/food/、adapters/railway/（新增 Live）
+**Missing Work:** Ecommerce/Food 按 CH7 顺序补齐 Scoring/Skill/Source/Verify/Watch/Notification，并声明 ECOMMERCE_LIVE_READY/FOOD_LIVE_READY。
 **Recommended Chapter:** CHAPTER 7
 
 ---
