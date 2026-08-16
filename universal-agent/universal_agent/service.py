@@ -95,6 +95,23 @@ class UniversalAgentService:
         self.idempotency = IdempotencyStore(repo=self.repos.idempotency_kv)
         self.notification_dedup = NotificationDedup(repo=self.repos.dedup_kv)
         self.killswitch = KillSwitch(repo=self.repos.killswitch_kv)
+        # P-MOBILE：SkillRegistry + CapabilityResolver + AppiumSkill（iPhone 控制）
+        from .adapters.mobile import AppiumSkill
+        from .core.contracts import SkillManifest
+        from .registry import SkillRegistry
+        from .registry.skills import CapabilityResolver
+        self.skill_registry = SkillRegistry()
+        self.skill_registry.register_skill(SkillManifest(
+            skill_id="appium.iphone", version="0.1.0", domains=["mobile", "iphone"],
+            capabilities={"search": True, "detail": True, "availability": True,
+                          "health_check": True, "prepare_action": True,
+                          "execute_order": False},  # 高危只经 ActionGateway
+            transport=["wda-http", "usb-tunnel"],
+            risk={"execution": "none"},
+            description="iPhone 控制：扫描已装 app / 详情 / 可用性 / 健康"))
+        self.capabilities = CapabilityResolver(self.skill_registry)
+        # AppiumSkill 实例（惰性：WDA 不可达时 fail-closed）
+        self.appium = AppiumSkill()
         adapter_kw = dict(coordinator=self.coordinator,
                           scan_runs=self.repos.scan_runs,
                           notifications=self.repos.notifications,
